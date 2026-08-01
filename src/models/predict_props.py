@@ -63,6 +63,30 @@ def latest_features_by_player(features: pd.DataFrame) -> pd.DataFrame:
     return features.groupby("player_name").tail(1).set_index("player_name")
 
 
+# Trend-conflict guard: catches exactly the Rebecca Allen case (real recent
+# rate + minutes both trending up, but the model recommends Under anyway).
+# Requires the trend to show up in BOTH the per-100 rate AND minutes played,
+# not just one noisy stat, before flagging -- a single-game outlier in rate
+# alone shouldn't trigger this. Thresholds are deliberately blunt (25%/15%)
+# so it only fires on a real, visible trend, not everyday sampling noise.
+TREND_RATE_THRESHOLD = 1.25
+TREND_MINUTES_THRESHOLD = 1.15
+
+
+def trend_conflict_flag(side: str, last5: float, last10: float, min5: float, min10: float) -> str:
+    rate_ratio = last5 / max(last10, 0.1)
+    minutes_ratio = min5 / max(min10, 1.0)
+
+    trending_up = rate_ratio >= TREND_RATE_THRESHOLD and minutes_ratio >= TREND_MINUTES_THRESHOLD
+    trending_down = rate_ratio <= 1 / TREND_RATE_THRESHOLD and minutes_ratio <= 1 / TREND_MINUTES_THRESHOLD
+
+    if side == "Under" and trending_up:
+        return "CONFLICT: trending UP, model says Under -- STAY AWAY"
+    if side == "Over" and trending_down:
+        return "CONFLICT: trending DOWN, model says Over -- STAY AWAY"
+    return ""
+
+
 def main() -> int:
     features = load_dataset(Path("data/processed/player_features.csv"))
     latest = latest_features_by_player(features)
@@ -121,12 +145,16 @@ def main() -> int:
         else:
             side, prob, odds, ev = "Under", 1 - prob_over, under_odds, ev_under
 
-        stake = kelly_stake(prob, odds, BANKROLL) if ev > EV_THRESHOLD else 0.0
-
         last5 = x_row[f"{target}_per100_last5"].iloc[0]
         last10 = x_row[f"{target}_per100_last10"].iloc[0]
         min5 = x_row["minutes_last5"].iloc[0]
         min10 = x_row["minutes_last10"].iloc[0]
+
+        flag = trend_conflict_flag(side, last5, last10, min5, min10)
+        # A flagged pick is a stay-away by definition -- no stake regardless
+        # of what the raw EV says, since the whole point of the flag is that
+        # the model and the player's own recent trend actively disagree.
+        stake = 0.0 if flag else (kelly_stake(prob, odds, BANKROLL) if ev > EV_THRESHOLD else 0.0)
 
         results.append({
             "player": player,
@@ -138,6 +166,7 @@ def main() -> int:
             "model_prob": round(prob, 3),
             "ev": round(ev, 3),
             "kelly_stake": round(stake, 2),
+            "flag": flag,
             # Supporting context -- shown for every pick, not just when asked.
             # Generic column names (not f"{target}_...") so every row uses the
             # same columns regardless of market -- otherwise the board would
@@ -152,8 +181,15 @@ def main() -> int:
     pd.set_option("display.max_rows", 100)
     print(board.to_string(index=False))
 
+    flagged = board[board["flag"] != ""]
     positive_ev = board[board["kelly_stake"] > 0]
     print(f"\n{len(positive_ev)} bets clear the EV>{EV_THRESHOLD} threshold out of {len(board)} evaluated.")
+    if not flagged.empty:
+        print(f"\n{len(flagged)} pick(s) had a high EV but were caught by the trend-conflict guard "
+              f"(stake forced to 0, not recommended):")
+        print(flagged[["player", "market", "side", "line", "ev", "stat_per100_last5",
+                        "stat_per100_last10", "minutes_last5_vs_last10"]].drop_duplicates(
+                            subset=["player", "market", "side", "line"]).to_string(index=False))
     return 0
 
 

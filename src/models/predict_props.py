@@ -123,6 +123,11 @@ def main() -> int:
 
         stake = kelly_stake(prob, odds, BANKROLL) if ev > EV_THRESHOLD else 0.0
 
+        last5 = x_row[f"{target}_per100_last5"].iloc[0]
+        last10 = x_row[f"{target}_per100_last10"].iloc[0]
+        min5 = x_row["minutes_last5"].iloc[0]
+        min10 = x_row["minutes_last10"].iloc[0]
+
         results.append({
             "player": player,
             "market": target,
@@ -133,6 +138,13 @@ def main() -> int:
             "model_prob": round(prob, 3),
             "ev": round(ev, 3),
             "kelly_stake": round(stake, 2),
+            # Supporting context -- shown for every pick, not just when asked.
+            # Generic column names (not f"{target}_...") so every row uses the
+            # same columns regardless of market -- otherwise the board would
+            # end up sparse/inconsistent across points/rebounds/assists rows.
+            "stat_per100_last5": round(last5, 2),
+            "stat_per100_last10": round(last10, 2),
+            "minutes_last5_vs_last10": f"{min5:.1f} vs {min10:.1f}",
         })
 
     board = pd.DataFrame(results).sort_values("ev", ascending=False)

@@ -15,6 +15,7 @@ import pandas as pd
 from scipy.optimize import minimize_scalar
 from scipy.stats import nbinom, poisson
 from sklearn.ensemble import GradientBoostingRegressor, HistGradientBoostingRegressor
+from sklearn.isotonic import IsotonicRegression
 
 TARGETS = ["points", "rebounds", "assists", "pra"]
 QUANTILES = [0.1, 0.25, 0.5, 0.75, 0.9]
@@ -96,13 +97,25 @@ def predict_quantiles(models: dict[float, GradientBoostingRegressor], X: pd.Data
 class PoissonModel:
     """Poisson regression for discrete count targets (assists). P(stat >
     line) uses the exact Poisson survival function -- no interpolation,
-    so no instability from collapsed/near-identical quantile predictions."""
+    so no instability from collapsed/near-identical quantile predictions.
 
-    def __init__(self, regressor: HistGradientBoostingRegressor):
+    Includes an isotonic recalibration layer fit on a real held-out slice:
+    confirmed directly (2026-08-01) that the raw tree regressor shrinks
+    toward the population mean -- overpredicting low-volume players,
+    underpredicting elite/high-volume ones -- because there are far fewer
+    training examples at the extremes. Isotonic regression corrects this
+    with a monotonic mapping from raw prediction to real outcome, fit on
+    data the regressor itself never trained on."""
+
+    def __init__(self, regressor: HistGradientBoostingRegressor, calibrator: IsotonicRegression | None = None):
         self.regressor = regressor
+        self.calibrator = calibrator
 
     def predict_lambda(self, X: pd.DataFrame) -> np.ndarray:
-        return np.clip(self.regressor.predict(X), 0.05, None)
+        raw = self.regressor.predict(X)
+        if self.calibrator is not None:
+            raw = self.calibrator.predict(raw)
+        return np.clip(raw, 0.05, None)
 
     def predict_prob_over(self, x_row: pd.DataFrame, line: float) -> float:
         lam = self.predict_lambda(x_row)[0]
@@ -113,10 +126,22 @@ class PoissonModel:
         return float(np.clip(prob, 0.02, 0.98))
 
 
-def train_poisson_model(train: pd.DataFrame, target: str) -> PoissonModel:
+def train_poisson_model(train: pd.DataFrame, target: str, calibration_frac: float = 0.15) -> PoissonModel:
+    """Trains the regressor on an earlier slice and fits the isotonic
+    correction on a real, later held-out slice (chronological split, not
+    random -- matches the no-leakage discipline used everywhere else)."""
+    train = train.sort_values("game_date")
+    cutoff = int(len(train) * (1 - calibration_frac))
+    fit_rows, calib_rows = train.iloc[:cutoff], train.iloc[cutoff:]
+
     regressor = HistGradientBoostingRegressor(loss="poisson", max_iter=200)
-    regressor.fit(train[FEATURE_COLS], train[target])
-    return PoissonModel(regressor)
+    regressor.fit(fit_rows[FEATURE_COLS], fit_rows[target])
+
+    raw_calib_pred = regressor.predict(calib_rows[FEATURE_COLS])
+    calibrator = IsotonicRegression(out_of_bounds="clip")
+    calibrator.fit(raw_calib_pred, calib_rows[target])
+
+    return PoissonModel(regressor, calibrator)
 
 
 class NegativeBinomialModel:

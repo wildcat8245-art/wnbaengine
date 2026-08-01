@@ -84,14 +84,22 @@ def main() -> int:
         else:
             models_by_target[target] = train_quantile_models(features, target)
 
+    # One prob_over per (player, market, line) -- doesn't depend on side/book.
+    # Odds DO depend on side and book, so both sides get evaluated against
+    # their own real quoted odds and the better side is reported.
     results = []
-    for _, row in props.iterrows():
-        target = MARKET_TO_TARGET.get(row["market"])
-        if target is None or row["side"] != "Over":
-            continue
-        player = row["player_name"]
+    grouped = props[props["market"].isin(MARKET_TO_TARGET)].groupby(
+        ["player_name", "market", "line", "bookmaker"]
+    )
+    for (player, market, line, book), group in grouped:
+        target = MARKET_TO_TARGET[market]
         if player not in latest.index:
             continue
+
+        over_row = group[group["side"] == "Over"]
+        under_row = group[group["side"] == "Under"]
+        if over_row.empty or under_row.empty:
+            continue  # need both sides' real odds to evaluate fairly
 
         x_row = latest.loc[[player], FEATURE_COLS]
         if x_row.isna().any(axis=None):
@@ -99,19 +107,30 @@ def main() -> int:
 
         model = models_by_target[target]
         if hasattr(model, "predict_prob_over"):
-            prob_over = model.predict_prob_over(x_row, row["line"])
+            prob_over = model.predict_prob_over(x_row, line)
         else:
-            prob_over = predict_prob_over(model, x_row, row["line"])
-        ev = prob_over * row["decimal_odds"]
-        stake = kelly_stake(prob_over, row["decimal_odds"], BANKROLL) if ev > EV_THRESHOLD else 0.0
+            prob_over = predict_prob_over(model, x_row, line)
+
+        over_odds = over_row["decimal_odds"].iloc[0]
+        under_odds = under_row["decimal_odds"].iloc[0]
+        ev_over = prob_over * over_odds
+        ev_under = (1 - prob_over) * under_odds
+
+        if ev_over >= ev_under:
+            side, prob, odds, ev = "Over", prob_over, over_odds, ev_over
+        else:
+            side, prob, odds, ev = "Under", 1 - prob_over, under_odds, ev_under
+
+        stake = kelly_stake(prob, odds, BANKROLL) if ev > EV_THRESHOLD else 0.0
 
         results.append({
             "player": player,
             "market": target,
-            "line": row["line"],
-            "book": row["bookmaker"],
-            "decimal_odds": row["decimal_odds"],
-            "model_prob_over": round(prob_over, 3),
+            "side": side,
+            "line": line,
+            "book": book,
+            "decimal_odds": odds,
+            "model_prob": round(prob, 3),
             "ev": round(ev, 3),
             "kelly_stake": round(stake, 2),
         })

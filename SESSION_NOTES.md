@@ -1,6 +1,7 @@
 # WNBA Player Prop System — Session State
 
-_Last updated: 2026-07-31. Read this first if picking the project back up._
+_Last updated: 2026-08-01 (late night / early morning session). Read this first if
+picking the project back up. §7 and §8 below are new since the 2026-07-31 save._
 
 ## 1. What this is
 
@@ -163,3 +164,91 @@ get_odds.py                    # OLD, pre-existing direct-DraftKings-scrape scri
 - A calibration chart was published as a Claude Artifact this session
   (backtest snapshot, not live-updating) — see auto-memory for the URL if needed;
   it reflects one specific backtest run and will drift if models are retrained.
+
+## 7. 2026-08-01 session: real live board run, more real bugs found and fixed
+
+Pulled real props for 2026-08-01's actual games (LVA@CHI, NY@PHX — 350 real prop
+rows, `data/raw/daily_props/props_2026-08-01.csv`) and ran the live board for real.
+This surfaced two more real defects that hadn't shown up in the backtest:
+
+1. **`predict_props.py` was silently discarding every Under.** It only ever
+   evaluated the "Over" side of each line. Fixed: now computes `prob_over` once per
+   (player, market, line), then evaluates BOTH sides against their own real quoted
+   odds (Over and Under have different odds due to vig) and reports whichever side
+   actually has the edge. This roughly quadrupled the number of real recommended
+   bets (21 → 82) because a lot of real value was sitting on the Under side the
+   whole time and was never being shown.
+
+2. **A real, systematic shrinkage bias in the assists Poisson model, found via a
+   live sanity check, not the backtest.** Comparing the model's predicted lambda
+   against players' simple recent form for real star players (Alyssa Thomas, A'ja
+   Wilson, Chelsea Gray, etc.) showed the model consistently underpredicting elite/
+   high-volume players and overpredicting bench players — classic tree-model
+   shrinkage toward the population mean (far fewer training examples at the
+   extremes). Confirmed across all 456 players by volume bucket, not just a few
+   cherry-picked names.
+
+   **Two real self-corrections happened while investigating this, both worth
+   remembering as methodology lessons:**
+   - First diagnostic compared model predictions to a *naive last-5-game average*
+     as if it were ground truth. That overstates the real problem — some of that
+     gap is the model legitimately using more information (last-10, opponent,
+     rest, home) than a naive last-5 average, not bias. **Always validate against
+     real held-out outcomes, not a naive proxy.**
+   - Second diagnostic (applied to points/PRA) compared the model's predicted
+     *median* (0.5 quantile) against the *mean* of real outcomes per bucket. For
+     any right-skewed stat, median < mean by definition even for a perfectly
+     calibrated model — that gap was a comparison artifact, not a real defect.
+     Points/PRA's real bias (median-vs-actual-median) turned out to be small and
+     non-monotonic — the earlier "points off by -1.65" alarm was wrong.
+     **Always compare like-for-like: median predictions against actual medians,
+     mean predictions against actual means.**
+
+   **Real, validated fix for assists**: isotonic regression recalibration
+   (`sklearn.isotonic.IsotonicRegression`), fit on a genuine held-out slice
+   *within* the training data (chronologically later 15% of the ≤2024 training
+   rows — NOT the 2025-2026 test set, to avoid circularity). `train_poisson_model()`
+   in `train_baseline_model.py` now does this split internally and returns a
+   `PoissonModel` with an optional `calibrator`. Verified on the true, fully
+   held-out 2025-2026 test set: per-bucket bias dropped from as much as -0.45/+0.36
+   down to under 0.09 in every bucket, no more systematic pattern. This is the
+   only model with isotonic recalibration applied — rebounds/points/PRA were
+   checked properly (see above) and didn't show the same severe problem, so they
+   were left as-is.
+
+3. **The board never showed *why*** — only player/line/odds/probability/EV, no
+   supporting numbers. Every pick required manually digging into a player's recent
+   games to understand the reasoning. Fixed: every row now includes
+   `stat_per100_last5`, `stat_per100_last10`, and `minutes_last5_vs_last10`
+   directly, so the supporting context is visible by default, not something that
+   has to be extracted pick-by-pick after the fact.
+
+4. **New: a trend-conflict "stay away" guard** (`trend_conflict_flag()` in
+   `predict_props.py`). Found live: Rebecca Allen's model recommendation was Under
+   on both points and rebounds, but her real recent form was clearly trending UP
+   (last-5 per-100 rate and minutes both well above last-10) — the model and her
+   own visible trend actively disagreed, and nothing caught that before the user
+   found it by manually pulling her game log. The guard fires when a player's
+   per-100 rate AND minutes both move ≥25%/≥15% in the direction opposite the
+   model's recommended side, and forces that pick's stake to 0 regardless of EV.
+   Verified live: caught Rebecca Allen (both props) and Natasha Mack (points,
+   trending down while model said Over) on the 2026-08-01 board — 9 duplicate
+   book-rows pulled, recommended-bet count went 79 → 73.
+
+## 8. Explicitly rejected again this session (don't re-raise)
+
+- **A target of "70-80% accuracy."** The user asked for this explicitly; it was
+  refused directly and honestly. No legitimate sports-prop system hits that —
+  the source academic paper itself reports real edges around 55-58% against fair
+  odds and treats that as a significant result, because at real sportsbook odds
+  that's already the difference between profit and loss. If asked again, explain
+  this rather than promise a number.
+- This session was very long (referenced by the user as roughly 4pm to past
+  midnight) and included real user frustration after two consecutive comparison
+  mistakes (see §7) produced alarming-but-wrong bias numbers before being
+  corrected. The concrete, lasting responses were: (a) fix the real bug that
+  existed (isotonic recalibration for assists), (b) add supporting context to
+  every board row by default, (c) add the trend-conflict guard. If a future
+  session inherits distrust from this one, the fastest way to rebuild it is
+  pointing at these three concrete, git-committed, verified changes rather than
+  re-asserting that things work.

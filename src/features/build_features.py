@@ -1,9 +1,9 @@
 """Feature engineering: lagged rolling windows, per-100 normalization, opponent adjustment.
 
-Mirrors the paper's approach (per-100-possession standardization removes
-pace effects; rolling last-N-games windows, always shifted so only games
-strictly preceding the target game are used) but applied at the player
-level for prop targets (PTS/REB/AST/PRA) instead of team win/loss.
+Per-100-possession standardization removes pace effects; rolling
+last-N-games windows are always shifted so only games strictly preceding
+the target game are used (no leakage), applied at the player level for
+prop targets (PTS/REB/AST/PRA).
 
 Possession estimate uses the standard single-team approximation
 (FGA - OREB + TOV + 0.44*FTA). This is a real, if imperfect, formula

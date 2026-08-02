@@ -1,9 +1,9 @@
 """Bulk-fetch real historical WNBA player box scores across multiple seasons.
 
 Builds the dataset needed for genuine chronological train/validate/test
-splits (paper-style: e.g. train on old seasons, validate on one, test on
-the most recent). Resumable: games already present in the output CSV are
-skipped, so a partial/interrupted run can just be re-launched.
+splits (train on old seasons, validate on one, test on the most recent).
+Resumable: games already present in the output CSV are skipped, so a
+partial/interrupted run can just be re-launched.
 
 Usage:
     python -m src.data.fetch_historical_boxscores --start-year 2015 --end-year 2026

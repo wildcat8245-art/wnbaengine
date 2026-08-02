@@ -134,7 +134,7 @@ def train_poisson_model(train: pd.DataFrame, target: str, calibration_frac: floa
     cutoff = int(len(train) * (1 - calibration_frac))
     fit_rows, calib_rows = train.iloc[:cutoff], train.iloc[cutoff:]
 
-    regressor = HistGradientBoostingRegressor(loss="poisson", max_iter=200)
+    regressor = HistGradientBoostingRegressor(loss="poisson", max_iter=200, random_state=42)
     regressor.fit(fit_rows[FEATURE_COLS], fit_rows[target])
 
     raw_calib_pred = regressor.predict(calib_rows[FEATURE_COLS])
@@ -180,7 +180,7 @@ def _fit_nb_dispersion(train: pd.DataFrame, target: str) -> float:
 
 
 def train_negative_binomial_model(train: pd.DataFrame, target: str) -> NegativeBinomialModel:
-    regressor = HistGradientBoostingRegressor(loss="poisson", max_iter=200)
+    regressor = HistGradientBoostingRegressor(loss="poisson", max_iter=200, random_state=42)
     regressor.fit(train[FEATURE_COLS], train[target])
     alpha = _fit_nb_dispersion(train, target)
     return NegativeBinomialModel(regressor, alpha)

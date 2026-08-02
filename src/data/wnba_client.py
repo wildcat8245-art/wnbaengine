@@ -35,7 +35,11 @@ def iso_utc_to_us_game_date(iso_timestamp: str) -> str:
     """
     if not iso_timestamp:
         return ""
-    dt = datetime.strptime(iso_timestamp, "%Y-%m-%dT%H:%MZ").replace(tzinfo=_UTC)
+    # wnba-api (ESPN-style) omits seconds ("...T00:00Z"); the-odds-api
+    # includes them ("...T17:00:00Z"). Accept both rather than assuming
+    # one format -- this is now called from both clients.
+    fmt = "%Y-%m-%dT%H:%M:%SZ" if iso_timestamp.count(":") == 2 else "%Y-%m-%dT%H:%MZ"
+    dt = datetime.strptime(iso_timestamp, fmt).replace(tzinfo=_UTC)
     return dt.astimezone(_US_EASTERN).date().isoformat()
 
 

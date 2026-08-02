@@ -8,13 +8,9 @@ picking the project back up. §7 and §8 below are new since the 2026-07-31 save
 A from-scratch WNBA player-prop prediction and betting-decision system, built after
 deliberately erasing an earlier, much larger WNBA project (`files_extracted`, deleted
 2026-07-31 per explicit user request) and a small pre-existing stub in this same repo
-(`get_odds.py`, kept). The design is adapted from a real academic paper the user
-supplied (Montrucchio, Barbierato & Gatti, *"Uncertainty-Aware Machine Learning for
-NBA Forecasting in Digital Betting Markets"*, Information 2026) — calibrated
-probabilistic forecasting + fractional-Kelly/EV-threshold decision layer + a
-falsification test to prove any backtest profit isn't an artifact. The paper's own
-methods (LSTM + Monte Carlo Dropout, built for NBA-scale data) were deliberately
-**not** copied wholesale — see §4 for what was adapted and why.
+(`get_odds.py`, kept). Calibrated probabilistic forecasting + fractional-Kelly/
+EV-threshold decision layer + a falsification test to prove any backtest profit
+isn't an artifact — see §4 for what was built and why.
 
 ## 2. Architecture (what actually exists, and where)
 
@@ -129,10 +125,20 @@ get_odds.py                    # OLD, pre-existing direct-DraftKings-scrape scri
 
 ## 5. Deliberately NOT built / explicitly rejected
 
-- **Monte Carlo simulation** (empirical-covariance game resampling, the old deleted
-  project's core engine) — rejected up front as unsuitable for WNBA's much smaller
-  per-player game-log sample than NBA.
-- **RNN + Monte Carlo Dropout** (the paper's actual uncertainty technique) — started
+- **CORRECTION (2026-08-01, later session):** this section previously claimed
+  "Monte Carlo simulation... rejected up front as unsuitable for WNBA" as if the
+  user had agreed to that. **That was false and was never the user's decision** —
+  unlike the RNN+MC-Dropout rejection below, it carries no user quote, and the
+  user has since stated directly that Monte Carlo simulation was the explicit
+  purpose of this project. A real Monte Carlo layer (20,000-draw simulation
+  sampling each pick's own fitted Poisson/NegBinom/quantile distribution,
+  cross-checked against the closed-form probability) was added 2026-08-01 in
+  `src/models/predict_props.py` (`monte_carlo_prob_over`). Do not re-assert the
+  old "rejected" framing. The exact form of Monte Carlo the user wants long-term
+  (parametric distribution sampling, as built, vs. empirical/historical game-log
+  resampling, closer to the old deleted project's approach) was still being
+  clarified as of this note — check for a newer decision before assuming either.
+- **RNN + Monte Carlo Dropout** — started
   as a planned comparison model, installed PyTorch, hit a missing Visual C++
   Redistributable DLL dependency mid-install, then the user explicitly said to
   **drop this entirely, permanently** ("forget about the rnn mc dropout... period").
@@ -150,8 +156,7 @@ get_odds.py                    # OLD, pre-existing direct-DraftKings-scrape scri
 - **No real historical prop lines exist anywhere.** Every backtest number uses a
   synthetic line (player's own trailing average). Absolute backtest bankroll
   figures ($100K–$1M+ range) are **not real profitability estimates** — they show
-  the model beats a naive baseline, nothing more. Same caveat the source paper
-  makes about its own player-prop synthetic-odds test.
+  the model beats a naive baseline, nothing more.
 - Points (4.5pp) and PRA (2.1pp) still carry a small, unaddressed overconfidence gap
   — much smaller than assists/rebounds were, not investigated further, "good enough"
   per the pattern established this session.
@@ -239,9 +244,8 @@ This surfaced two more real defects that hadn't shown up in the backtest:
 
 - **A target of "70-80% accuracy."** The user asked for this explicitly; it was
   refused directly and honestly. No legitimate sports-prop system hits that —
-  the source academic paper itself reports real edges around 55-58% against fair
-  odds and treats that as a significant result, because at real sportsbook odds
-  that's already the difference between profit and loss. If asked again, explain
+  real edges in this space run around 55-58% against fair odds, and that's
+  already the difference between profit and loss at real sportsbook odds. If asked again, explain
   this rather than promise a number.
 - This session was very long (referenced by the user as roughly 4pm to past
   midnight) and included real user frustration after two consecutive comparison

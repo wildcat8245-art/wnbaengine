@@ -22,6 +22,7 @@ from pathlib import Path
 import requests
 
 from src.data import odds_client
+from src.data.wnba_client import iso_utc_to_us_game_date
 
 OUTPUT_DIR = Path("data/raw/daily_props")
 
@@ -30,6 +31,20 @@ def fetch_today(min_quota_floor: int, output_dir: Path) -> int:
     with requests.Session() as session:
         events, quota = odds_client.get_events(session=session)
         print(f"{len(events)} upcoming/live WNBA events. Quota after events call: {quota}", file=sys.stderr)
+
+        # get_events() returns ALL upcoming events, not just today's -- confirmed
+        # directly (2026-08-01) it silently included games 1-2 days out, which
+        # got saved into a file named after today's date and treated as today's
+        # slate by predict_props.py. Filter to games whose real US game date
+        # (UTC commence_time converted to US/Eastern, same conversion already
+        # used for historical box scores) matches today before spending any
+        # quota on their prop odds.
+        today_us = date.today().isoformat()
+        todays_events = [e for e in events if iso_utc_to_us_game_date(e.get("commence_time", "")) == today_us]
+        skipped = len(events) - len(todays_events)
+        if skipped:
+            print(f"Skipping {skipped} event(s) not scheduled for today ({today_us}) US time.", file=sys.stderr)
+        events = todays_events
 
         if quota.remaining is not None and quota.remaining < min_quota_floor:
             print(

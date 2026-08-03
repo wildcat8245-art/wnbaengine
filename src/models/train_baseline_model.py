@@ -123,7 +123,7 @@ def train_quantile_models(train: pd.DataFrame, target: str) -> dict[float, Gradi
     X = train[FEATURE_COLS]
     y = train[target]
     for q in QUANTILES:
-        model = GradientBoostingRegressor(loss="quantile", alpha=q, n_estimators=60, max_depth=3)
+        model = GradientBoostingRegressor(loss="quantile", alpha=q, n_estimators=60, max_depth=3, random_state=42)
         model.fit(X, y)
         models[q] = model
     return models

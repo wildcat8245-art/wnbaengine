@@ -39,14 +39,17 @@ MARKET_TO_TARGET = {
 }
 
 # Which engine actually drives the pick, per target -- decided by backtest,
-# not assumed. backtest_props.py (2026-08-02 run, ~8,900 held-out 2025-2026
-# bets) showed the empirical bootstrap engine beats the parametric model for
-# points (264K vs 178K synthetic-line bankroll) but loses badly for rebounds
-# (13K vs 385K), assists (7.8K vs 21K), and PRA (247K vs 1.24M) -- the
-# parametric models for those three have real fixes (NB2 overdispersion fit,
-# isotonic recalibration) that the raw bootstrap doesn't get the benefit of.
+# not assumed. Re-run of backtest_props.py on 2026-08-03 (after fixing the
+# quantile regressor's under-capacity bug -- n_estimators=200, max_depth=4,
+# random_state=42) reversed the earlier points result: parametric now beats
+# empirical MC for points too (246.7K vs 179K), because the fix that helped
+# the parametric model doesn't help the bootstrap engine. All 7 targets now
+# favor the parametric model on the full held-out 2025-2026 backtest:
+# points 246.7K>179K, rebounds 519.6K>20.3K, assists 20.2K>5.9K,
+# pra 1.39M>96.1K, tpm 4.9K>2.2K, steals 7.6K>0.4K, blocks 875>715 (both
+# still net-losing -- see the unresolved blocks concern in SESSION_NOTES).
 # Re-run the backtest and update this set if either engine changes.
-EMPIRICAL_MC_TARGETS = {"points"}
+EMPIRICAL_MC_TARGETS: set[str] = set()
 
 KELLY_FRACTION = 0.3
 EV_THRESHOLD = 1.05

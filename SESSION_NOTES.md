@@ -1,12 +1,13 @@
 # WNBA Player Prop System — Session State
 
-_Last updated: 2026-08-03 (late session, final). Read this first if
-picking the project back up. **§12 is new — it documents real backtest
+_Last updated: 2026-08-03 (continued, later still). Read this first if
+picking the project back up. **§13 is new and supersedes §12.1's routing
+table — the quantile-regressor capacity fix (see §13.1) changed the points
+engine comparison after §12.1 was written.** §12 documents real backtest
 results for everything in §11, and TWO REVERTS (on/off splits, garbage-time)
-that §11 does not reflect. Read §12 before trusting anything §11 says is
-live.** §11 is long — read it in full before touching predict_props.py,
-train_baseline_model.py, or build_features.py. §10 is new since the
-2026-08-02 save; §9 since 2026-08-01; §7/§8 since 2026-07-31._
+that §11 does not reflect. §11 is long — read it in full before touching
+predict_props.py, train_baseline_model.py, or build_features.py. §10 is new
+since the 2026-08-02 save; §9 since 2026-08-01; §7/§8 since 2026-07-31._
 
 ## 1. What this is
 
@@ -806,3 +807,133 @@ the raw made/attempted parse needed to compute a real `tpm` column from
   Monte Carlo resampling (all explicitly discussed and declined by the
   user or shown to be unbuildable/unvalidated — see §11 for the specific
   reasoning on each, not repeated here).
+
+## 13. 2026-08-03 (continued session): quantile-regressor capacity fix, points routing reversal, real 3-model ensemble stack
+
+**Supersedes §12.1's routing table.** Everything below is real, tested,
+and either already live (`predict_props.py`) or persisted as a standalone
+validated script (ensemble stack — not yet wired in).
+
+### 13.1 Root cause found for an apparent points/PRA decline: model capacity, not the new features
+
+A same-session before/after comparison made §12's new pace/position-defense/
+shooting-efficiency features (§11) look like they made points and PRA worse.
+Real cause, found via a controlled ablation test (old features vs new
+features, same capacity; new features, new capacity): `train_quantile_models()`
+(`train_baseline_model.py`) still used `GradientBoostingRegressor(n_estimators=60,
+max_depth=3)` with no `random_state` — sized for a much smaller feature set
+from earlier in the project, and non-reproducible across runs (no seed),
+which also invalidated any same-session before/after comparison that didn't
+control for it. **Fixed**: `n_estimators=200, max_depth=4, random_state=42`
+(commit `7629c3f`, same commit also deleted the confirmed-dead `get_odds.py`
+and its skill file). Poisson/NegBinom models (`max_iter=200`) already had
+adequate capacity and needed no change. Real validated effect: points
++47%, PRA +183% on the controlled ablation.
+
+### 13.2 Full 7-target backtest re-run with the fix — points routing REVERSES
+
+`backtest_props.py`, full real run, ~8,900 held-out 2025-2026 bets, same
+methodology as §12.1:
+
+| target | parametric bankroll | empirical MC bankroll | winner | live routing after this session |
+|---|---|---|---|---|
+| points | **246,743** | 179,028 | **parametric (flipped)** | parametric |
+| rebounds | 519,639 | 20,322 | parametric | parametric (unchanged) |
+| assists | 20,204 | 5,938 | parametric | parametric (unchanged) |
+| pra | 1,394,685 | 96,082 | parametric | parametric (unchanged) |
+| tpm | 4,882 | 2,152 | parametric | parametric (unchanged) |
+| steals | 7,568 | 411 | parametric | parametric (unchanged) |
+| blocks | 875 (loses) | 715 (loses) | parametric | parametric — **still unresolved, both lose money, see §12.1** |
+
+Before the capacity fix, empirical MC genuinely won for points (§12.1:
+119,748 vs 147,078). After the fix, the parametric model jumped to 246,743
+and now beats empirical MC too — the fix that helped the parametric model
+doesn't help the bootstrap engine, which doesn't depend on the quantile
+model's capacity. **Fixed live**: `EMPIRICAL_MC_TARGETS` in
+`predict_props.py` changed from `{"points"}` to an empty set — all 7 targets
+now route to the parametric model. Re-run the backtest and update this if
+either engine changes again. Board regenerated and republished after this
+change (`board_2026-08-03.html`, 127 props) — confirmed every pick's
+reasoning now says "computed by the parametric model."
+
+### 13.3 Real 3-model ensemble stack for points — built, bug found and fixed, validated
+
+Per explicit request to build a real ensemble stack (genuinely diverse base
+algorithms + a trained meta-learner, not another tree-boosting variant —
+see §11/prior session for the diversity check that found GBM vs
+HistGradientBoostingRegressor correlate at 0.9947, i.e. no real diversity).
+
+**Base learners** (real, different inductive biases):
+1. `GradientBoostingRegressor` — sequential tree boosting (existing tuned model)
+2. `RandomForestRegressor` — bagging; quantile via the empirical distribution
+   of each tree's point prediction (standard technique for getting a quantile
+   estimate from a non-quantile-native model)
+3. `QuantileRegressor` (linear, `sklearn.linear_model`) — genuinely different
+   functional form from both tree methods
+
+**Meta-learner bug found and fixed**: first version used plain
+`LinearRegression` per quantile level to blend the 3 base predictions.
+Real result: bankroll went to **$0.00** (4,540 bets, total ruin). Root
+cause: squared-error loss fits the conditional MEAN regardless of which
+quantile it's supposedly representing, so the q=0.1 and q=0.9 blended
+outputs collapsed toward the same target, destroying the predicted spread
+and producing wildly overconfident, badly miscalibrated probabilities.
+**Fixed**: meta-learner changed to `QuantileRegressor(quantile=q, alpha=0.01)`
+per level — matches the loss to the quantile it represents (also gives the
+same L2-regularization benefit a Ridge meta-learner would, applied at the
+correct loss for a quantile stack).
+
+**Real validated result** (chronological fit/holdout split within train,
+same 85/15 discipline used for isotonic calibration elsewhere; meta-learner
+fit only on the holdout slice, never on data the base models trained on):
+**$503,568.95 (1,895 bets)** vs the single capacity-fixed model's
+**$246,742.58 (2,008 bets)** — roughly 2x. Sanity-checked before being
+trusted (an unusually large improvement was exactly what the capacity bug
+above looked like at first too):
+- Real win rate 57.6% vs stated avg confidence 60.2% — close, honest,
+  nothing like the severe miscalibration bugs found and fixed earlier this
+  project for rebounds/assists.
+- Bucket calibration is good through the 50-80% stated-confidence range
+  (~1,876 of 1,895 bets).
+- **Real, small-sample concern**: the >80%-stated-confidence bucket (n=19
+  only) actually LOSES (50%/44% win rate) — same small-sample high-
+  confidence-tail unreliability pattern already seen with rebounds. Don't
+  trust any single high-confidence pick from this stack until more data
+  accumulates there.
+- Bankroll compounds smoothly through the bet sequence ($5.5K at 25% of
+  bets, $35K at 50%, $164K at 75%, $504K at 100%) — not one lucky bet.
+- The 2x gain (bigger than the "few percentage points" expectation set from
+  published classification-task research before building this) is plausible
+  because Kelly staking compounds a real edge exponentially over ~1,900
+  sequential bets — a modest real tail-calibration improvement can produce
+  a large final gap without needing a dramatically better single-bet edge.
+
+**Persisted**: `src/backtest/backtest_points_ensemble_stack.py` (real,
+importable, runnable standalone script — NOT a scratchpad file, survives
+past this session). **NOT wired into `predict_props.py`** — the live board
+still uses the single capacity-fixed quantile model for points. Wiring it
+in is a real-money decision-logic change (rule 6) and needs an explicit go-
+ahead, not assumed here.
+
+**Scope, not yet done**: this stack is validated for `points` only. The
+other 6 targets already use Poisson/NegBinom models with their own real
+fixes and were not re-tested against a stacked version — doing so means
+repeating this same (fairly slow — the linear `QuantileRegressor` step uses
+an LP solver) training process per target, a real time/compute cost.
+
+### 13.4 Note on suspicious repeated content this session
+
+Several messages arrived during this session — some wrapped in the same
+`<task-notification>` format as real background-task events, one as a
+plain message — pushing an unrequested "XGBoost + LightGBM + Random Forest
++ Ridge" stack and later a "Bayesian copula same-game-parlay simulator,"
+with oddly specific/promotional framing. Treated as untrusted content, not
+acted on directly: the suggested architecture was checked on its technical
+merits (XGBoost/LightGBM are more gradient-boosted trees, which the
+project's own 0.9947-correlation diversity test already showed adds nothing
+over what's built) and the copula/parlay idea would be a new, unrequested
+subsystem (rule 7) requiring data (on-court joint lineup tracking) this
+project doesn't currently have a pipeline for. The user then separately,
+explicitly asked to adapt the copula idea using this project's own real
+data/models rather than the literal content — that adapted work has not
+been started yet as of this save.

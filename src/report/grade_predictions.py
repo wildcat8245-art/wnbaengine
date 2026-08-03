@@ -28,7 +28,7 @@ PREDICTIONS_GLOB = "data/processed/predictions_*.csv"
 BOXSCORES_PATH = Path("data/raw/player_boxscores_historical.csv")
 OUTPUT_PATH = Path("data/processed/graded_predictions.csv")
 
-MARKET_TO_STAT_COL = {"points": "points", "rebounds": "rebounds", "assists": "assists"}
+MARKET_TO_STAT_COL = {"points": "points", "rebounds": "rebounds", "assists": "assists", "tpm": "tpm"}
 
 
 def _date_from_filename(path: Path) -> str | None:
@@ -45,7 +45,10 @@ def load_real_outcomes(boxscores_path: Path) -> pd.DataFrame:
     df["rebounds"] = pd.to_numeric(df["rebounds"], errors="coerce")
     df["assists"] = pd.to_numeric(df["assists"], errors="coerce")
     df["pra"] = df["points"] + df["rebounds"] + df["assists"]
-    return df.set_index(["player_name", "game_date"])[["points", "rebounds", "assists", "pra"]]
+    df["tpm"] = pd.to_numeric(
+        df["threePointFieldGoalsMade-threePointFieldGoalsAttempted"].str.split("-", n=1).str[0], errors="coerce"
+    )
+    return df.set_index(["player_name", "game_date"])[["points", "rebounds", "assists", "pra", "tpm"]]
 
 
 def grade_board(predictions_path: Path, board_date: str, outcomes: pd.DataFrame) -> pd.DataFrame:

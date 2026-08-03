@@ -26,7 +26,6 @@ import pandas as pd
 import requests
 
 from src.data import injuries_client
-from src.features.on_off_splits import load_played_minutes, compute_on_off_split, MIN_OUT_GAMES
 from src.features.garbage_time import (
     fit_blowout_minutes_curve, minutes_adjustment_ratio, MIN_MEANINGFUL_ADJUSTMENT,
 )
@@ -210,12 +209,6 @@ def main() -> int:
     props = pd.read_csv(prop_files[-1])
     print(f"Using {prop_files[-1]}: {len(props)} prop rows")
 
-    # Raw (unfiltered) historical box scores -- needed for real teammate
-    # on/off splits below (games a teammate did/didn't play), which requires
-    # knowing every game a team actually played, not just per-100 engineered
-    # features. Read once here rather than per-row.
-    raw_boxscores = load_played_minutes(Path("data/raw/player_boxscores_historical.csv"))
-
     # Real live game-level Vegas total/spread. UPDATE 2026-08-03: the odds
     # key was upgraded to a paid plan with real historical-odds access
     # (archive starts 2022-05-21) -- the spread itself now also feeds the
@@ -398,6 +391,17 @@ def main() -> int:
         # injury does; Over picks just get an informational note, since the
         # vacuum only strengthens those.
         vacuum_hits = vacuum_map.get(player, [])
+        # REVERTED 2026-08-03: this used to also append a quantified real
+        # per-36 on/off split (see src/features/on_off_splits.py). Backtested
+        # it properly (src/backtest/backtest_on_off_splits.py) and it showed
+        # no real out-of-sample predictive validity (in-season split: 0.019
+        # correlation, 51.4% sign agreement -- barely above chance, even
+        # after fixing the original multi-year-gap methodology issue).
+        # Reverted to the qualitative-only flag below, which IS real and
+        # sourced (the injury report's own text naming a beneficiary), just
+        # not a validated number. Do not re-add the quantified version
+        # without a genuinely new, tested hypothesis for why it would work --
+        # this exact approach was tried and failed validation twice.
         vacuum_note = ""
         if vacuum_hits:
             hit = vacuum_hits[0]
@@ -405,30 +409,6 @@ def main() -> int:
                 f"{hit['injured_teammate']} ({hit['status']}) named directly as this player's "
                 f"minutes/usage beneficiary -- {hit['note']}"
             )
-
-            # Real, quantified upgrade to the above qualitative flag: this
-            # player's own real per-36 rate in real historical games the
-            # injured teammate did vs didn't play (see on_off_splits.py).
-            # Never fabricates a number from too small a sample -- reports
-            # insufficient data explicitly instead.
-            player_team = latest.loc[player, "team"] if player in latest.index else None
-            if player_team:
-                split = compute_on_off_split(raw_boxscores, player_team, hit["injured_teammate"], {player})
-                result = split.get(player)
-                if result and not result["insufficient_data"]:
-                    pct = result["pct_change"].get(target)
-                    if pct is not None:
-                        vacuum_note += (
-                            f" REAL SPLIT: across {result['games_with']} real games with "
-                            f"{hit['injured_teammate']} playing vs {result['games_without']} without, "
-                            f"{player}'s own {target} rate is {pct:+.1f}% different without them."
-                        )
-                elif result:
-                    vacuum_note += (
-                        f" (real on/off split not reported -- insufficient sample: "
-                        f"{result['games_without']} games without / {result['games_with']} with, "
-                        f"need >= {MIN_OUT_GAMES} of each)"
-                    )
 
             if side == "Under" and not flag:
                 flag = f"USAGE VACUUM: {vacuum_note} -- more usage argues against Under -- excluded"

@@ -25,9 +25,42 @@ from src.data import odds_client
 from src.data.wnba_client import iso_utc_to_us_game_date
 
 OUTPUT_DIR = Path("data/raw/daily_props")
+GAME_LINES_DIR = Path("data/raw/daily_game_lines")
 
 
-def fetch_today(min_quota_floor: int, output_dir: Path) -> int:
+def fetch_game_lines(min_quota_floor: int, quota, output_dir: Path, session: requests.Session) -> None:
+    """Save today's real game-level spread/total odds, informational only.
+
+    Cheap (2 quota units total for the whole slate, not per event -- see
+    odds_client.get_game_lines) so this runs whenever the floor allows it,
+    independent of how much the player-prop loop above already spent.
+    """
+    if quota.remaining is not None and quota.remaining < min_quota_floor:
+        print(
+            f"Skipping game-lines fetch: remaining quota ({quota.remaining}) is below "
+            f"the safety floor ({min_quota_floor}).",
+            file=sys.stderr,
+        )
+        return
+    try:
+        events_odds, quota = odds_client.get_game_lines(session=session)
+    except requests.RequestException as exc:
+        print(f"Game-lines fetch failed: {exc}", file=sys.stderr)
+        return
+    rows = odds_client.flatten_game_lines_to_rows(events_odds)
+    if not rows:
+        print("No game-line rows collected.", file=sys.stderr)
+        return
+    output_dir.mkdir(parents=True, exist_ok=True)
+    out_path = output_dir / f"game_lines_{date.today().isoformat()}.csv"
+    with out_path.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
+        writer.writeheader()
+        writer.writerows(rows)
+    print(f"Wrote {len(rows)} game-line rows to {out_path}. Quota: {quota}")
+
+
+def fetch_today(min_quota_floor: int, output_dir: Path, game_lines_dir: Path) -> int:
     with requests.Session() as session:
         events, quota = odds_client.get_events(session=session)
         print(f"{len(events)} upcoming/live WNBA events. Quota after events call: {quota}", file=sys.stderr)
@@ -76,6 +109,8 @@ def fetch_today(min_quota_floor: int, output_dir: Path) -> int:
                 file=sys.stderr,
             )
 
+        fetch_game_lines(min_quota_floor, quota, game_lines_dir, session)
+
     if not all_rows:
         print("No prop rows collected.", file=sys.stderr)
         return 0
@@ -95,8 +130,9 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--min-quota-floor", type=int, default=20)
     parser.add_argument("--output-dir", type=Path, default=OUTPUT_DIR)
+    parser.add_argument("--game-lines-dir", type=Path, default=GAME_LINES_DIR)
     args = parser.parse_args(argv)
-    return fetch_today(args.min_quota_floor, args.output_dir)
+    return fetch_today(args.min_quota_floor, args.output_dir, args.game_lines_dir)
 
 
 if __name__ == "__main__":

@@ -205,6 +205,30 @@ def main() -> int:
     props = pd.read_csv(prop_files[-1])
     print(f"Using {prop_files[-1]}: {len(props)} prop rows")
 
+    # Real live game-level Vegas total/spread -- informational context only,
+    # NOT wired into prob_over/EV/staking. This key's plan has no historical
+    # odds access (confirmed directly, HISTORICAL_UNAVAILABLE_ON_FREE_USAGE_PLAN),
+    # so there is no way to backtest a total/spread-based adjustment against
+    # real past outcomes -- per this project's own rule, nothing goes into the
+    # actual decision logic without that. Shown in the rationale so the human
+    # reading the board can weigh real blowout/pace risk themselves.
+    game_line_files = sorted(glob.glob("data/raw/daily_game_lines/game_lines_*.csv"))
+    vegas_by_event: dict[str, dict[str, object]] = {}
+    player_event: dict[str, str] = {}
+    if game_line_files:
+        game_lines = pd.read_csv(game_line_files[-1])
+        consensus = game_lines.groupby("event_id").agg(
+            game_total=("game_total", "median"),
+            home_spread=("home_spread", "median"),
+            home_team=("home_team", "first"),
+            away_team=("away_team", "first"),
+        )
+        vegas_by_event = consensus.to_dict(orient="index")
+        player_event = props.drop_duplicates("player_name").set_index("player_name")["event_id"].to_dict()
+        print(f"Vegas game lines: {len(vegas_by_event)} game(s) with a real total/spread snapshot.")
+    else:
+        print("No game-lines snapshot found -- board will not show Vegas total/spread context.")
+
     # Real live injury check -- see injuries_client.py. Restricted to teams
     # actually on today's slate (from the real odds data itself) so a
     # same-named/unrelated player from another team can't collide.
@@ -333,6 +357,25 @@ def main() -> int:
             if side == "Under" and not flag:
                 flag = f"USAGE VACUUM: {vacuum_note} -- more usage argues against Under -- excluded"
 
+        # Real live Vegas game total/spread -- informational only (see the
+        # NOTE where vegas_by_event is built above for why this doesn't feed
+        # prob_over/EV/staking). Gives the human reading the board a real
+        # market read on pace/blowout risk to weigh alongside the model.
+        vegas_note = ""
+        event_id = player_event.get(player)
+        game_line = vegas_by_event.get(event_id) if event_id else None
+        if game_line:
+            total = game_line.get("game_total")
+            spread = game_line.get("home_spread")
+            home_team = game_line.get("home_team")
+            parts = []
+            if pd.notna(total):
+                parts.append(f"total {total:.1f}")
+            if pd.notna(spread) and home_team:
+                parts.append(f"{home_team} {spread:+.1f}")
+            if parts:
+                vegas_note = "Vegas: " + ", ".join(parts) + "."
+
         # A flagged pick is a stay-away by definition -- no stake regardless
         # of what the raw EV says, since the whole point of the flag is that
         # the model/trend/injury status actively disagree with betting it.
@@ -376,6 +419,7 @@ def main() -> int:
             f"Injury status: {injury_status}"
             f"{' -- ' + injury_note if injury_note else ''}. "
             + (f"Usage vacuum: {vacuum_note}. " if vacuum_note else "")
+            + (f"{vegas_note} " if vegas_note else "")
             + f"DECISION: picked {side} because the actual probability of clearing {line} was "
             f"{prob_over*100:.1f}% Over / {(1-prob_over)*100:.1f}% Under, computed by the {engine_desc}. "
             f"EV {ev:.3f} at {odds:.2f} decimal odds on {book}."
@@ -396,6 +440,7 @@ def main() -> int:
             "injury_status": injury_status,
             "injury_note": injury_note,
             "usage_vacuum": vacuum_note,
+            "vegas_note": vegas_note,
             "monte_carlo_over_pct": f"{prob_over * 100:.1f}%",
             "monte_carlo_pool": mc_source,
             "pick_pct": f"{prob * 100:.1f}% {side}",

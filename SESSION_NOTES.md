@@ -395,9 +395,28 @@ own claims (per `CLAUDE.md` rule 5).
    Vegas game total/spread was agreed as the real, worthwhile gap — a
    genuine market signal for pace/blowout risk the system currently ignores
    entirely, even though the same the-odds-api key already used for player
-   props also carries it. **In progress as of this save**: adding game
-   total/spread as a feature — check whether historical odds are actually
-   available on this API key/tier before assuming it can be a *trained*
-   model feature versus only a live/display-time signal (the-odds-api's
-   historical endpoint is typically a separate paid tier from the standard
-   500/month plan this project uses).
+   props also carries it.
+
+5. **Vegas game total/spread added — as informational context only, not
+   wired into the decision engine.** Confirmed directly: this key's plan has
+   no historical-odds access (`GET /v4/historical/...` returns
+   `HISTORICAL_UNAVAILABLE_ON_FREE_USAGE_PLAN`, a 401, zero quota cost to
+   check). That means there is no way to backfill real historical lines to
+   train a model feature on, or to backtest a total/spread-based adjustment
+   against real past outcomes — and per `CLAUDE.md` rule 1, nothing goes
+   into `predict_props.py`'s actual probability/EV/staking logic without
+   that. So this was built as transparent context instead:
+   - `src/data/odds_client.py`: `get_game_lines()` — bulk
+     `/sports/{sport}/odds/` call (spreads+totals for the whole day's slate
+     in one request; confirmed 2 quota units total, not per-event, unlike
+     the per-event player-prop endpoint) + `flatten_game_lines_to_rows()`.
+   - `fetch_daily_props.py`: also saves
+     `data/raw/daily_game_lines/game_lines_YYYY-MM-DD.csv` every run
+     (same quota-floor guard as the props fetch).
+   - `predict_props.py`: joins each player to their game's consensus
+     total/home-spread (median across books) via the daily props file's own
+     `event_id`, and appends a `Vegas: total X, {home_team} {spread}.` note
+     to every rationale + a `vegas_note` column — informational only, does
+     not affect `prob_over`, EV, or stake. Real example from the 2026-08-03
+     board: Golden State (home) at -13.5 against Toronto, a real, visible
+     blowout-risk signal the model has no other way to see.

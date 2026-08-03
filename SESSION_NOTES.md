@@ -1,7 +1,8 @@
 # WNBA Player Prop System — Session State
 
-_Last updated: 2026-08-01 (late night / early morning session). Read this first if
-picking the project back up. §7 and §8 below are new since the 2026-07-31 save._
+_Last updated: 2026-08-02 (midday session). Read this first if picking the
+project back up. §9 below is new since the 2026-08-01 save; §7 and §8 are new
+since the 2026-07-31 save._
 
 ## 1. What this is
 
@@ -21,6 +22,7 @@ src/data/
   build_game_season_types.py  # schedule-only walk -> game_id -> season type + real US date
   odds_client.py               # the-odds-api.com: live player prop odds client
   fetch_daily_props.py         # daily snapshot of today's real prop odds (quota-safe)
+  injuries_client.py           # wnba-api /injuries: live injury reports + usage-vacuum detection
 src/features/
   build_features.py           # rolling windows, per-100, opponent adjustment, rest/home
 src/models/
@@ -256,3 +258,72 @@ This surfaced two more real defects that hadn't shown up in the backtest:
   session inherits distrust from this one, the fastest way to rebuild it is
   pointing at these three concrete, git-committed, verified changes rather than
   re-asserting that things work.
+
+## 9. 2026-08-02 session: empirical Monte Carlo engine, live injury/usage-vacuum checks
+
+Commit `105e9474` (see `CLAUDE.md` for the process rules that came out of this
+same session). Real changes made, in order of how they change what the board
+actually recommends:
+
+1. **`empirical_resample_prob_over()` in `predict_props.py`** — a second,
+   independent probability engine: bootstrap-resamples `n_sims` draws (with
+   replacement) directly from a player's own last 20 real game outcomes, no
+   parametric shape assumed. `EMPIRICAL_MC_TARGETS` decides, per market, which
+   engine actually drives the live pick — chosen by backtest, not by default.
+   The 2026-08-02 backtest run (~8,900 held-out 2025-2026 bets) showed the
+   empirical engine wins for points (264K vs 178K synthetic-line bankroll) but
+   loses badly for rebounds (13K vs 385K), assists (7.8K vs 21K), and PRA (247K
+   vs 1.24M) — so only points uses it live; the other three keep the
+   parametric model (NB2 / isotonic-Poisson / quantile). Falls back to the
+   parametric probability when a player has fewer than `MC_MIN_POOL_GAMES` (8)
+   real prior games, flagged in the board output, never silent.
+2. **`backtest_props.py` rewritten to walk three engines side by side** on
+   identical bets: parametric, empirical_mc (the same function that drives the
+   live board), and a falsification baseline (p=0.5 always) — so the routing
+   decision in (1) is validated against real held-out outcomes before being
+   trusted, not asserted.
+3. **New `src/data/injuries_client.py`** — live injury report client (wnba-api
+   `/injuries` endpoint, same RAPIDAPI_KEY as `wnba_client.py`). Wired into
+   `predict_props.py`: a confirmed "Out" (or out-for-season) player has their
+   pick's stake forced to 0 regardless of EV, board says so loudly. If the
+   injury API call itself fails, the board prints a visible warning rather than
+   silently presenting an unchecked board as checked.
+4. **Usage-vacuum detection** (`build_usage_vacuum_map`) — cross-references
+   each board player's own name against the literal text of every injury
+   report's long/short comment. Real WNBA injury writeups routinely name the
+   specific teammates expected to absorb missing minutes; this just checks
+   whether a player's name is directly present in that text — no guessed
+   minutes-redistribution model, no hardcoded name pairs. Confirmed directly
+   (2026-08-02) it recovers real cases (Julie Allemand/Marina Mabrey, Janelle
+   Salaun/Gabby Williams, Diamond Miller/Aaliyah Edwards, Isabelle
+   Harrison/Aneesah Morrow) with zero manual entries. Under picks on the
+   named beneficiary are auto-excluded (more usage argues against Under); Over
+   picks get an informational note only, since the vacuum reinforces those.
+5. **`fetch_daily_props.py`** — now filters fetched events to those whose real
+   US-calendar game date (UTC `commence_time` converted to US/Eastern) matches
+   today, before spending any quota on their prop odds. Confirmed directly
+   that the events endpoint was returning games 1-2 days out, which had been
+   silently saved into a file named after today's date and treated as today's
+   slate.
+6. **`wnba_client.iso_utc_to_us_game_date()`** now accepts both wnba-api's
+   (ESPN-style, no seconds) and the-odds-api's (seconds included) timestamp
+   formats, since this same function is now called from both clients.
+7. **`train_baseline_model.py`** — `random_state=42` added to both
+   `HistGradientBoostingRegressor` instances (Poisson and Negative Binomial)
+   for reproducibility across reruns.
+
+**Live board run confirms this is wired in, not just written**: the
+2026-08-02 board (`predictions_2026-08-02_full_report.md`, 253 combinations
+evaluated, 59 recommended after all checks) shows real examples of every
+mechanism above firing on the same day's real slate — e.g. Brittney Griner
+(confirmed Out, knee) auto-excluded despite EV 1.301, and multiple Janelle
+Salaun / Ariel Atkins Under picks excluded by the usage-vacuum check with the
+real sourced injury text quoted in the board's own excluded-picks section.
+
+**Known gap this update closes**: this file previously did not document any
+of the above even though the code and a live board run already reflected it
+— commit `105e9474` touched `SESSION_NOTES.md` only to strip false
+paper-citation framing (see §5), not to record its own feature work. Point
+this out again if a future session finds SESSION_NOTES.md lagging behind
+the actual code — check `git log` and the code itself, not just this file's
+own claims (per `CLAUDE.md` rule 5).

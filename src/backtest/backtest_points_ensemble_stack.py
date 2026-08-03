@@ -1,8 +1,10 @@
-"""Real diverse-algorithm ensemble stack for the points target, validated
-against the single capacity-fixed quantile model baseline ($246,742.58,
-see backtest_props.py). NOT wired into predict_props.py yet -- this is a
-standalone validation script, kept here so it can be rerun without
-retraining from scratch in a scratchpad file that disappears at session end.
+"""Real diverse-algorithm ensemble stack for the two quantile-family targets
+(points, pra), validated against the single capacity-fixed quantile model
+baseline (points: $246,742.58, see backtest_props.py). NOT wired into
+predict_props.py yet -- this is a standalone validation script, kept here
+so it can be rerun without retraining from scratch in a scratchpad file
+that disappears at session end. Run with `python -m src.backtest.
+backtest_points_ensemble_stack points` or `... pra` (defaults to both).
 
 Base learners (genuine diversity, not three flavors of the same algorithm --
 see SESSION_NOTES.md for why a prior GBM-vs-HistGBM diversity check found
@@ -48,6 +50,7 @@ target, a real time/compute cost, not yet authorized.
 
 from __future__ import annotations
 
+import sys
 import warnings
 from pathlib import Path
 
@@ -56,7 +59,7 @@ import pandas as pd
 from sklearn.ensemble import GradientBoostingRegressor, RandomForestRegressor
 from sklearn.linear_model import QuantileRegressor
 
-from src.models.predict_props import kelly_stake
+from src.models.staking import kelly_stake
 from src.models.train_baseline_model import FEATURE_COLS, load_dataset, train_test_split_by_season
 
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -65,7 +68,6 @@ VIG_DECIMAL_ODDS = 1.909
 EV_THRESHOLD = 1.02
 STARTING_BANKROLL = 1000.0
 QUANTILES = [0.1, 0.25, 0.5, 0.75, 0.9]
-TARGET = "points"
 
 
 def rf_quantile_predict(rf: RandomForestRegressor, X: pd.DataFrame, q: float) -> np.ndarray:
@@ -76,14 +78,14 @@ def rf_quantile_predict(rf: RandomForestRegressor, X: pd.DataFrame, q: float) ->
     return np.quantile(all_preds, q, axis=0)
 
 
-def train_stack(train: pd.DataFrame):
+def train_stack(train: pd.DataFrame, target: str):
     """Returns (gbm_models, rf, lin_models, meta_models) all fit on a real
     chronological fit/holdout split within train -- same discipline used
     elsewhere in this codebase for isotonic calibration."""
     train_sorted = train.sort_values("game_date")
     cutoff = int(len(train_sorted) * 0.85)
     fit_rows, holdout_rows = train_sorted.iloc[:cutoff], train_sorted.iloc[cutoff:]
-    X_fit, y_fit = fit_rows[FEATURE_COLS], fit_rows[TARGET]
+    X_fit, y_fit = fit_rows[FEATURE_COLS], fit_rows[target]
     X_hold = holdout_rows[FEATURE_COLS]
 
     gbm_models = {}
@@ -109,7 +111,7 @@ def train_stack(train: pd.DataFrame):
             lin_models[q].predict(X_hold),
         ])
         meta = QuantileRegressor(quantile=q, alpha=0.01, solver="highs")
-        meta.fit(base_preds, holdout_rows[TARGET])
+        meta.fit(base_preds, holdout_rows[target])
         meta_models[q] = meta
 
     return gbm_models, rf, lin_models, meta_models
@@ -139,18 +141,18 @@ def prob_over_from_quantiles(preds: np.ndarray, line: float) -> float:
     return float(np.clip(prob, 0.05, 0.95))
 
 
-def main() -> int:
-    df = load_dataset(Path("data/processed/player_features.csv"))
+def run_target(df: pd.DataFrame, target: str) -> None:
     train, test = train_test_split_by_season(df, test_seasons={2025, 2026})
     test = test.reset_index(drop=True)
 
-    raw_estimate = test[f"{TARGET}_per100_last5"] / 100 * test["possessions"]
-    test[f"{TARGET}_synthetic_line"] = np.round(raw_estimate * 2) / 2
+    raw_estimate = test[f"{target}_per100_last5"] / 100 * test["possessions"]
+    test[f"{target}_synthetic_line"] = np.round(raw_estimate * 2) / 2
 
-    print("Training stack (GBM + RandomForest + linear QuantileRegressor, quantile-consistent meta-learner)...")
-    gbm_models, rf, lin_models, meta_models = train_stack(train)
+    print(f"\n=== {target} ===", flush=True)
+    print("Training stack (GBM + RandomForest + linear QuantileRegressor, quantile-consistent meta-learner)...", flush=True)
+    gbm_models, rf, lin_models, meta_models = train_stack(train, target)
 
-    print("Generating blended predictions on the real test set...")
+    print("Generating blended predictions on the real test set...", flush=True)
     stack_preds = stack_predict_quantiles(gbm_models, rf, lin_models, meta_models, test[FEATURE_COLS])
     for i, q in enumerate(QUANTILES):
         test[f"stack_q{q}"] = stack_preds[:, i]
@@ -160,8 +162,8 @@ def main() -> int:
     bankroll = STARTING_BANKROLL
     bets = []
     for _, row in test.iterrows():
-        line = row[f"{TARGET}_synthetic_line"]
-        actual = row[TARGET]
+        line = row[f"{target}_synthetic_line"]
+        actual = row[target]
         preds = np.array([row[f"stack_q{q}"] for q in QUANTILES])
         prob = prob_over_from_quantiles(preds, line)
         ev = prob * VIG_DECIMAL_ODDS
@@ -172,10 +174,17 @@ def main() -> int:
             bets.append({"prob": prob, "won": won})
 
     bets_df = pd.DataFrame(bets)
-    print(f"\nStack bankroll: {bankroll:.2f} ({len(bets_df)} bets)")
-    print(f"Real win rate: {bets_df['won'].mean():.1%}, stated avg confidence: {bets_df['prob'].mean():.1%}")
+    print(f"Stack bankroll: {bankroll:.2f} ({len(bets_df)} bets)", flush=True)
+    print(f"Real win rate: {bets_df['won'].mean():.1%}, stated avg confidence: {bets_df['prob'].mean():.1%}", flush=True)
     bets_df["bucket"] = pd.cut(bets_df["prob"], bins=[0.5, 0.6, 0.7, 0.8, 0.9, 1.0])
-    print(bets_df.groupby("bucket", observed=True).agg(n=("won", "size"), win_rate=("won", "mean")))
+    print(bets_df.groupby("bucket", observed=True).agg(n=("won", "size"), win_rate=("won", "mean")), flush=True)
+
+
+def main() -> int:
+    targets = sys.argv[1:] or ["points", "pra"]
+    df = load_dataset(Path("data/processed/player_features.csv"))
+    for target in targets:
+        run_target(df, target)
     return 0
 
 

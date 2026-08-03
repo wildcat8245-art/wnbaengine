@@ -26,9 +26,11 @@ import pandas as pd
 import requests
 
 from src.data import injuries_client
+from src.models.ensemble_stacks import train_stacked_quantile_model, train_stacked_rate_model
+from src.models.staking import KELLY_FRACTION, MAX_STAKE_FRACTION, kelly_stake
 from src.models.train_baseline_model import (
     FEATURE_COLS, POISSON_TARGETS, NEGATIVE_BINOMIAL_TARGETS,
-    load_dataset, train_poisson_model, train_negative_binomial_model, train_quantile_models,
+    load_dataset,
 )
 
 MARKET_TO_TARGET = {
@@ -51,9 +53,7 @@ MARKET_TO_TARGET = {
 # Re-run the backtest and update this set if either engine changes.
 EMPIRICAL_MC_TARGETS: set[str] = set()
 
-KELLY_FRACTION = 0.3
 EV_THRESHOLD = 1.05
-MAX_STAKE_FRACTION = 0.05
 BANKROLL = 1000.0
 
 
@@ -160,15 +160,6 @@ def predict_point_estimate(model, x_row: pd.DataFrame) -> tuple[float, str]:
     return float(median), "quantile median"
 
 
-def kelly_stake(prob: float, decimal_odds: float, bankroll: float) -> float:
-    b = decimal_odds - 1
-    q = 1 - prob
-    f = (b * prob - q) / b
-    f = max(f, 0.0) * KELLY_FRACTION
-    f = min(f, MAX_STAKE_FRACTION)
-    return f * bankroll
-
-
 def latest_features_by_player(features: pd.DataFrame) -> pd.DataFrame:
     features = features.sort_values("game_date")
     return features.groupby("player_name").tail(1).set_index("player_name")
@@ -265,15 +256,20 @@ def main() -> int:
         print(f"Usage-vacuum check: {len(vacuum_map)} player(s) named directly as a teammate's "
               f"minutes/usage beneficiary today: {sorted(vacuum_map.keys())}")
 
+    # Real 3-diverse-base-learner ensemble stacks, wired in 2026-08-03 after
+    # per-target validation (see SESSION_NOTES.md for the full backtest
+    # numbers): points/pra get a GBM+RandomForest+linear-QuantileRegressor
+    # stack with a quantile-consistent meta-learner; rebounds/assists/tpm/
+    # steals/blocks get a HistGBM-poisson+RandomForest+PoissonRegressor
+    # rate ensemble with a Ridge meta-learner. Both replace the single
+    # model that was here before -- see src/models/ensemble_stacks.py.
     models_by_target = {}
     for target in set(MARKET_TO_TARGET.values()):
-        print(f"Training final {target} model on all available history...")
-        if target in POISSON_TARGETS:
-            models_by_target[target] = train_poisson_model(features, target)
-        elif target in NEGATIVE_BINOMIAL_TARGETS:
-            models_by_target[target] = train_negative_binomial_model(features, target)
+        print(f"Training final {target} ensemble stack on all available history...")
+        if target in POISSON_TARGETS or target in NEGATIVE_BINOMIAL_TARGETS:
+            models_by_target[target] = train_stacked_rate_model(features, target)
         else:
-            models_by_target[target] = train_quantile_models(features, target)
+            models_by_target[target] = train_stacked_quantile_model(features, target)
 
     # One prob_over per (player, market, line) -- doesn't depend on side/book.
     # Odds DO depend on side and book, so both sides get evaluated against

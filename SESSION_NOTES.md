@@ -1,13 +1,18 @@
 # WNBA Player Prop System — Session State
 
 _Last updated: 2026-08-03 (continued, later still). Read this first if
-picking the project back up. **§13 is new and supersedes §12.1's routing
-table — the quantile-regressor capacity fix (see §13.1) changed the points
-engine comparison after §12.1 was written.** §12 documents real backtest
-results for everything in §11, and TWO REVERTS (on/off splits, garbage-time)
-that §11 does not reflect. §11 is long — read it in full before touching
-predict_props.py, train_baseline_model.py, or build_features.py. §10 is new
-since the 2026-08-02 save; §9 since 2026-08-01; §7/§8 since 2026-07-31._
+picking the project back up. **§14 is new and is what's actually live right
+now**: `predict_props.py` was rewired to use real diverse-base-learner
+ensemble stacks (not the old single Poisson/NegBinom/quantile models) for
+all 4 live-tradable markets, after validating all 7 targets' stacks with a
+real bankroll backtest. **§13 is superseded by §14** wherever they disagree
+(§13 only covered points; §14 covers all 7 and the actual live wiring).
+§13 supersedes §12.1's routing table specifically (the quantile-regressor
+capacity fix in §13.1). §12 documents real backtest results for everything
+in §11, and TWO REVERTS (on/off splits, garbage-time) that §11 does not
+reflect. §11 is long — read it in full before touching predict_props.py,
+train_baseline_model.py, or build_features.py. §10 is new since the
+2026-08-02 save; §9 since 2026-08-01; §7/§8 since 2026-07-31._
 
 ## 1. What this is
 
@@ -937,3 +942,129 @@ project doesn't currently have a pipeline for. The user then separately,
 explicitly asked to adapt the copula idea using this project's own real
 data/models rather than the literal content — that adapted work has not
 been started yet as of this save.
+
+## 14. 2026-08-03 (continued further): stacks built and validated for all 7 targets, wired into the live board
+
+Per explicit instruction ("RUN ALL PROPS FIRST VALIDATE THEN WE WIRE THEM
+ALL IN AT THE SAME TIME"): built the same kind of diverse-base-learner
+stack for the remaining 6 targets (§13.3 only covered points), validated
+all 7 with a real bankroll backtest + calibration check, then wired every
+live-tradable target into `predict_props.py` at once.
+
+### 14.1 Two stack designs, matched to the two model families
+
+**Quantile family (points, pra)** — `src/backtest/backtest_points_ensemble_stack.py`,
+generalized to take a target argument. Same design as §13.3: GBM + RandomForest
++ linear QuantileRegressor, quantile-consistent `QuantileRegressor` meta-learner.
+
+**Count family (rebounds=NegBinom, assists/tpm/steals/blocks=Poisson)** —
+new `src/backtest/backtest_count_ensemble_stack.py`. Different design on
+purpose: these targets predict a single rate (mean count), not a set of
+quantiles, so blending is a squared-error problem, not a pinball-loss one.
+Base learners: `HistGradientBoostingRegressor(loss="poisson")` (same family
+as the current production model), `RandomForestRegressor` (bagging),
+`PoissonRegressor` (linear Poisson GLM — genuinely different functional
+form, and correctly loss-matched to these targets, unlike a plain linear-
+regression base learner would be). Meta-learner: **Ridge regression** —
+correct here (unlike for the quantile stack) because blending predicted
+means is exactly what squared-error loss is for. Rebounds' overdispersion
+`alpha` reuses the existing `_fit_nb_dispersion` fit directly (it's derived
+from real per-player variance data, not from any specific regressor's
+output, so a blended mean doesn't require refitting it).
+
+### 14.2 Full real validation, all 7 targets
+
+Same bankroll methodology as backtest_props.py (VIG_DECIMAL_ODDS=1.909,
+EV_THRESHOLD=1.02, real synthetic line, real fractional-Kelly staking),
+chronological fit/holdout/test split throughout, `random_state=42`:
+
+| target | baseline (single model) | stack | multiple | real win rate | stated confidence |
+|---|---|---|---|---|---|
+| points | 246,743 | 503,569 | ~2.0x | 57.6% | 60.2% |
+| pra | 1,394,685 | 1,816,333 | ~1.3x | 57.2% | 59.6% |
+| rebounds | 519,639 | 1,227,553 | ~2.4x | 57.7% | 62.6% |
+| assists | 20,204 | 100,640 | ~5.0x | 56.2% | 62.0% |
+| tpm | 4,882 | 12,026 | ~2.5x | 58.0% | 60.3% |
+| steals | 7,568 | 11,829 | ~1.6x | 56.8% | 59.3% |
+| blocks | 875 (LOSES) | 1,894 | **flips to profitable** | 57.7% | 60.8% |
+
+**Blocks flipping from a real, unresolved losing concern (§12.1/13.2 — both
+engines lost money) to profitable is the single most notable result.**
+Bucket-level calibration was checked for every target (not just the
+headline number, per the discipline the meta-learner bug in §13.3 already
+justified) — no target shows a bucket that actually loses money, unlike
+points' small >80%-confidence bucket. Full per-bucket numbers are in the
+scripts' own output; not reproduced here in full, but the general pattern
+is a consistent, modest 3-6 percentage point overconfidence gap across
+every target — not a red flag, and much better than the raw miscalibration
+bugs (9.6pp+) found and fixed earlier in this project for rebounds/assists.
+
+### 14.3 Wiring into predict_props.py — a real circular-import bug found and fixed first
+
+`src/models/ensemble_stacks.py` (new) wraps each stack behind the exact
+same interface `predict_props.py` already expected from a single model
+(`predict_prob_over`, `predict_lambda` OR `predict_mean`+`alpha` OR
+dict-like quantile access) — chosen specifically so the rest of the live
+pipeline (`predict_point_estimate`, `parametric_simulation_prob_over`, the
+trend-conflict guard, etc.) needed **zero changes** beyond swapping which
+training function gets called.
+
+**Real bug caught before it shipped**: the first version gave the
+count-family wrapper class BOTH `predict_lambda` AND `predict_mean`
+unconditionally. `predict_point_estimate` and `parametric_simulation_prob_over`
+both check `hasattr(model, "predict_lambda")` FIRST — so rebounds (a
+NegBinom target) would have silently been routed through the POISSON
+branch instead of NegBinom, drawing from the wrong distribution entirely.
+**Fixed** by splitting into two separate classes (`StackedPoissonRateModel`
+— only `predict_lambda`; `StackedNegBinomRateModel` — only `predict_mean`
++ `alpha`), mirroring exactly how the pre-existing `PoissonModel`/
+`NegativeBinomialModel` classes already avoid this ambiguity. Caught by a
+deliberate smoke test (`predict_point_estimate`/`parametric_simulation_prob_over`
+called on each wrapper type, checking the returned label and which
+`hasattr` branch fired) BEFORE the full live run, not discovered live.
+
+**Second real bug, also circular-import-shaped**: `ensemble_stacks.py`
+needs the two backtest-stack modules, which both imported `kelly_stake`
+from `predict_props.py` — but `predict_props.py` now needs
+`ensemble_stacks.py`, a real circular import. **Fixed** by extracting
+`kelly_stake`/`KELLY_FRACTION`/`MAX_STAKE_FRACTION` into a new, dependency-
+free `src/models/staking.py`; `predict_props.py` and both backtest-stack
+modules now import from there instead of from each other.
+
+**Per-player caching**: both wrapper classes cache their blended prediction
+keyed by player name, since the live loop calls `predict_prob_over`/
+`predict_point_estimate`/`parametric_simulation_prob_over` separately for
+the same (player, target) across every bookmaker offering that prop —
+without caching, the RandomForest's 200-tree prediction loop would repeat
+per bookmaker instead of once per player.
+
+### 14.4 What's live now
+
+`predict_props.py`'s model-training loop (`models_by_target`) now calls
+`train_stacked_quantile_model`/`train_stacked_rate_model` instead of the
+old single-model functions, for all 4 live-tradable markets (points,
+rebounds, assists, tpm — the only 4 `PROP_MARKETS` the-odds-api.com
+actually offers for WNBA; pra/steals/blocks were validated in §14.2 but
+have no real odds feed to bet on regardless, so "wiring in all 7" in
+practice means these 4). Full live run completed clean (no errors,
+`git status` shows only the expected 3 new files + 2 edits), board
+regenerated and republished (124 props) — every pick's reasoning
+confirms the new model type (`Poisson mean`, `NegBinom mean`, or
+`quantile median` point-estimate labels all present and correctly routed).
+
+**Real operational cost, not hidden**: live board generation is now
+substantially slower per run — it retrains 4 ensemble stacks (3 base
+learners + a meta-learner each) instead of 4 single models. The points
+stack alone took roughly 20-30 minutes on this run (it retrains on ALL
+available history, not just the backtest's smaller train split, so this
+is real, not a backtest-only cost). Budget for this before running the
+board close to a deadline.
+
+**Not done**: `backtest_props.py` itself still hardcodes the old single-
+model training functions and was not modified to exercise the wired-in
+stacks end-to-end — validation instead relied on (a) each stack's own
+dedicated backtest using the identical bankroll methodology, and (b) a
+deliberate wiring smoke test confirming correct `hasattr` routing before
+the full live run. If a future session wants `backtest_props.py` itself
+to test the stacks, it would need the same training-function swap made
+here.

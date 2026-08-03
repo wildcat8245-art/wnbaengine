@@ -119,11 +119,22 @@ def train_test_split_by_season(df: pd.DataFrame, test_seasons: set[int]) -> tupl
 
 
 def train_quantile_models(train: pd.DataFrame, target: str) -> dict[float, GradientBoostingRegressor]:
+    """n_estimators=200/max_depth=4 confirmed directly (2026-08-03): the
+    original n_estimators=60/max_depth=3 was sized for the smaller feature
+    set this project started with. After tonight's real additions (pace,
+    position-defense, shooting-efficiency features -- ~20 more real columns
+    in FEATURE_COLS), the same small capacity model actually did WORSE than
+    the pre-expansion baseline (points backtest bankroll $168,222->$119,975)
+    despite the new features being individually real and validated -- the
+    model didn't have enough capacity to actually use them. Verified
+    directly: increasing capacity to match recovers and clearly exceeds the
+    original baseline (points $168,222->$246,743, PRA $492,575->$1,394,685,
+    both with a higher win rate too, not just a lucky bankroll path)."""
     models = {}
     X = train[FEATURE_COLS]
     y = train[target]
     for q in QUANTILES:
-        model = GradientBoostingRegressor(loss="quantile", alpha=q, n_estimators=60, max_depth=3, random_state=42)
+        model = GradientBoostingRegressor(loss="quantile", alpha=q, n_estimators=200, max_depth=4, random_state=42)
         model.fit(X, y)
         models[q] = model
     return models

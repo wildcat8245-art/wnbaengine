@@ -17,7 +17,7 @@ from scipy.stats import nbinom, poisson
 from sklearn.ensemble import GradientBoostingRegressor, HistGradientBoostingRegressor
 from sklearn.isotonic import IsotonicRegression
 
-TARGETS = ["points", "rebounds", "assists", "pra"]
+TARGETS = ["points", "rebounds", "assists", "pra", "tpm", "steals", "blocks"]
 QUANTILES = [0.1, 0.25, 0.5, 0.75, 0.9]
 
 # Assists are discrete, low-count, and heavily zero-inflated (27.8% of
@@ -51,16 +51,57 @@ POISSON_TARGETS = {"assists"}
 # 57.3% against a more modest 61.7% stated confidence (gap 9.6pp -> 4.4pp).
 NEGATIVE_BINOMIAL_TARGETS = {"rebounds"}
 
+# 3PM/steals/blocks (2026-08-03): confirmed even more zero-heavy than assists
+# (52-72% zero-rate vs assists' 27.8%), so Poisson is the right family here
+# too, same reasoning as assists. Confirmed the same real tail-shrinkage
+# pattern assists had (bucketing real players by their own actual volume:
+# model overpredicts the lowest-volume bucket, underpredicts the highest --
+# e.g. tpm bucket bias +0.30/-0.47 pre-recalibration by bucket), so isotonic
+# recalibration applies to these three as well, via the same
+# train_poisson_model() calibration path. NOTE: the population-level mean
+# match is good for all three (tpm 0.848 vs 0.898 actual, steals 0.800 vs
+# 0.789, blocks 0.428 vs 0.430) but full validation (bet-level win rate vs
+# stated confidence -- the only tool this project has confirmed is valid for
+# zero-heavy discrete targets, see the assists note above) was deferred to
+# the end-of-session backtest per explicit user instruction -- do not treat
+# these three as fully validated until that runs.
+POISSON_TARGETS = POISSON_TARGETS | {"tpm", "steals", "blocks"}
+
 FEATURE_COLS = [
     "points_per100_last5", "rebounds_per100_last5", "assists_per100_last5", "pra_per100_last5",
-    "steals_per100_last5", "blocks_per100_last5", "turnovers_per100_last5", "minutes_last5",
-    "assists_zero_rate_last5", "steals_zero_rate_last5", "blocks_zero_rate_last5",
+    "tpm_per100_last5", "steals_per100_last5", "blocks_per100_last5", "turnovers_per100_last5", "minutes_last5",
+    "assists_zero_rate_last5", "steals_zero_rate_last5", "blocks_zero_rate_last5", "tpm_zero_rate_last5",
     "points_per100_last10", "rebounds_per100_last10", "assists_per100_last10", "pra_per100_last10",
-    "steals_per100_last10", "blocks_per100_last10", "turnovers_per100_last10", "minutes_last10",
-    "assists_zero_rate_last10", "steals_zero_rate_last10", "blocks_zero_rate_last10",
+    "tpm_per100_last10", "steals_per100_last10", "blocks_per100_last10", "turnovers_per100_last10", "minutes_last10",
+    "assists_zero_rate_last10", "steals_zero_rate_last10", "blocks_zero_rate_last10", "tpm_zero_rate_last10",
     "own_team_ortg_last5", "own_team_drtg_last5", "own_team_pace_last5",
     "opp_team_ortg_last5", "opp_team_drtg_last5", "opp_team_pace_last5",
     "rest_days", "is_home",
+    # Dynamic Pace & Possessions layer: real head-to-head expected game pace
+    # (own x opp pace, normalized by the real rolling league-average pace --
+    # see build_features.compute_league_avg_pace) plus each target's own
+    # per-100 rate explicitly scaled against it. Hands the model a real,
+    # directly-computed projected volume instead of leaving the pace x rate
+    # interaction for it to reconstruct implicitly from separate features.
+    "expected_pace_last5", "expected_pace_last10",
+    "points_projected_volume_last5", "points_projected_volume_last10",
+    "rebounds_projected_volume_last5", "rebounds_projected_volume_last10",
+    "assists_projected_volume_last5", "assists_projected_volume_last10",
+    # Defensive Matchup & Localized Splits: real position-specific (G/F/C)
+    # defensive rate allowed, replacing the single blended opp_team_drtg as
+    # the primary opponent-defense signal for player props (opp_team_drtg
+    # stays in FEATURE_COLS too -- team-level context is still real
+    # information, just coarser; kept rather than removed since there's no
+    # evidence yet that dropping it helps).
+    "opp_drtg_vs_position_points_last5", "opp_drtg_vs_position_points_last10",
+    "opp_drtg_vs_position_rebounds_last5", "opp_drtg_vs_position_rebounds_last10",
+    "opp_drtg_vs_position_assists_last5", "opp_drtg_vs_position_assists_last10",
+    # Shooting Efficiency & Regression Engine: real eFG%/TS%, shrunk toward
+    # each player's own real career baseline via an empirically fit
+    # attempts-weighted correction (see build_features.compute_shooting_efficiency
+    # for the real held-out validation of the shrinkage constants).
+    "efg_shrunk_last5", "efg_shrunk_last10",
+    "ts_shrunk_last5", "ts_shrunk_last10",
 ]
 
 

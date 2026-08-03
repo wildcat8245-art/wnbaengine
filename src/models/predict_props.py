@@ -26,6 +26,7 @@ import pandas as pd
 import requests
 
 from src.data import injuries_client
+from src.features.on_off_splits import load_played_minutes, compute_on_off_split, MIN_OUT_GAMES
 from src.models.train_baseline_model import (
     FEATURE_COLS, POISSON_TARGETS, NEGATIVE_BINOMIAL_TARGETS,
     load_dataset, train_poisson_model, train_negative_binomial_model, train_quantile_models,
@@ -35,6 +36,7 @@ MARKET_TO_TARGET = {
     "player_points": "points",
     "player_rebounds": "rebounds",
     "player_assists": "assists",
+    "player_threes": "tpm",
 }
 
 # Which engine actually drives the pick, per target -- decided by backtest,
@@ -205,6 +207,12 @@ def main() -> int:
     props = pd.read_csv(prop_files[-1])
     print(f"Using {prop_files[-1]}: {len(props)} prop rows")
 
+    # Raw (unfiltered) historical box scores -- needed for real teammate
+    # on/off splits below (games a teammate did/didn't play), which requires
+    # knowing every game a team actually played, not just per-100 engineered
+    # features. Read once here rather than per-row.
+    raw_boxscores = load_played_minutes(Path("data/raw/player_boxscores_historical.csv"))
+
     # Real live game-level Vegas total/spread -- informational context only,
     # NOT wired into prob_over/EV/staking. This key's plan has no historical
     # odds access (confirmed directly, HISTORICAL_UNAVAILABLE_ON_FREE_USAGE_PLAN),
@@ -354,6 +362,31 @@ def main() -> int:
                 f"{hit['injured_teammate']} ({hit['status']}) named directly as this player's "
                 f"minutes/usage beneficiary -- {hit['note']}"
             )
+
+            # Real, quantified upgrade to the above qualitative flag: this
+            # player's own real per-36 rate in real historical games the
+            # injured teammate did vs didn't play (see on_off_splits.py).
+            # Never fabricates a number from too small a sample -- reports
+            # insufficient data explicitly instead.
+            player_team = latest.loc[player, "team"] if player in latest.index else None
+            if player_team:
+                split = compute_on_off_split(raw_boxscores, player_team, hit["injured_teammate"], {player})
+                result = split.get(player)
+                if result and not result["insufficient_data"]:
+                    pct = result["pct_change"].get(target)
+                    if pct is not None:
+                        vacuum_note += (
+                            f" REAL SPLIT: across {result['games_with']} real games with "
+                            f"{hit['injured_teammate']} playing vs {result['games_without']} without, "
+                            f"{player}'s own {target} rate is {pct:+.1f}% different without them."
+                        )
+                elif result:
+                    vacuum_note += (
+                        f" (real on/off split not reported -- insufficient sample: "
+                        f"{result['games_without']} games without / {result['games_with']} with, "
+                        f"need >= {MIN_OUT_GAMES} of each)"
+                    )
+
             if side == "Under" and not flag:
                 flag = f"USAGE VACUUM: {vacuum_note} -- more usage argues against Under -- excluded"
 

@@ -16,7 +16,7 @@ import requests
 
 BASE_URL = "https://api.the-odds-api.com/v4"
 SPORT_KEY = "basketball_wnba"
-PROP_MARKETS = "player_points,player_rebounds,player_assists"
+PROP_MARKETS = "player_points,player_rebounds,player_assists,player_threes"
 GAME_LINE_MARKETS = "spreads,totals"
 
 

@@ -131,20 +131,168 @@ def compute_team_ratings(team_game: pd.DataFrame, opp_map: pd.DataFrame) -> pd.D
     ]]
 
 
+# Empirically fit (2026-08-03), same method-of-moments discipline as the
+# NB2 rebounds dispersion fit in train_baseline_model.py: for a grid of
+# shrinkage strengths K (in real attempts-equivalent units), measured MSE of
+# the shrunk last-5-game rate against that SAME game's real actual shooting
+# outcome, picked the K minimizing MSE on train seasons (<=2024), then
+# verified the improvement holds on the true held-out 2025-2026 test set --
+# it does: eFG% MSE 0.0915->0.0789 (raw last5 -> shrunk), TS% MSE
+# 0.0818->0.0708, both genuine, out-of-sample reductions, not just a
+# train-set fit. A single game's shooting outcome is extremely noisy
+# relative to a 5-game sample (rarely more than ~20-25 real attempts), which
+# is why the fit favors such heavy shrinkage toward the real career-to-date
+# baseline.
+EFG_SHRINKAGE_K = 1000.0
+TS_SHRINKAGE_K = 750.0
+
+POSITION_DEFENSE_STATS = ("points", "rebounds", "assists")
+
+
+def compute_shooting_efficiency(df: pd.DataFrame, windows: tuple[int, ...] = ROLLING_WINDOWS) -> pd.DataFrame:
+    """Real eFG%/TS%, computed from made/attempted SUMS over the rolling
+    window (not a naive mean of per-game percentages, which would wrongly
+    weight a 2-attempt game the same as a 15-attempt game), then regressed
+    toward each player's own real career-to-date baseline via attempts-
+    weighted empirical-Bayes shrinkage -- same category of fix as the
+    isotonic recalibration already validated for assists, applied here to
+    raw shooting volatility rather than a model's prediction bias.
+
+    "Uncharacteristically hot or cold" recent shooting is exactly what gets
+    pulled back toward the real baseline; a genuinely large, high-volume
+    real shift in a player's own shooting still comes through, it's just
+    not overweighted, because the correction is real makes/attempts math
+    with an empirically fit strength, not an assumption.
+    """
+    df = df.sort_values(["player_id", "game_date"]).copy()
+    grp = df.groupby("player_id")
+
+    sum_cols = ["fgm", "fga", "tpm", "fta", "points"]
+    for window in windows:
+        for col in sum_cols:
+            df[f"{col}_sum_last{window}"] = grp[col].transform(
+                lambda s: s.shift(1).rolling(window, min_periods=window).sum()
+            )
+    # Real career-to-date baseline (expanding, shifted -- only real games
+    # strictly before this one), requires at least 10 real prior games
+    # before reporting a baseline at all.
+    for col in sum_cols:
+        df[f"{col}_sum_career"] = grp[col].transform(lambda s: s.shift(1).expanding(min_periods=10).sum())
+
+    career_fga = df["fga_sum_career"]
+    career_tsa = career_fga + 0.44 * df["fta_sum_career"]
+    df["efg_career"] = (df["fgm_sum_career"] + 0.5 * df["tpm_sum_career"]) / career_fga
+    df["ts_career"] = df["points_sum_career"] / (2 * career_tsa)
+
+    for window in windows:
+        fga = df[f"fga_sum_last{window}"]
+        tsa = fga + 0.44 * df[f"fta_sum_last{window}"]
+        made_equiv = df[f"fgm_sum_last{window}"] + 0.5 * df[f"tpm_sum_last{window}"]
+
+        df[f"efg_last{window}"] = made_equiv / fga
+        df[f"ts_last{window}"] = df[f"points_sum_last{window}"] / (2 * tsa)
+
+        # Shrinkage toward the real career baseline; degrades gracefully to
+        # exactly the career rate when fga/tsa is 0 (no real recent
+        # attempts), and toward the raw last-N rate as fga/tsa grows large
+        # relative to the fitted K.
+        df[f"efg_shrunk_last{window}"] = (made_equiv + EFG_SHRINKAGE_K * df["efg_career"]) / (fga + EFG_SHRINKAGE_K)
+        df[f"ts_shrunk_last{window}"] = (
+            df[f"points_sum_last{window}"] + 2 * TS_SHRINKAGE_K * df["ts_career"]
+        ) / (2 * (tsa + TS_SHRINKAGE_K))
+
+    return df
+
+
+def compute_position_defense(df: pd.DataFrame, opp_map: pd.DataFrame, team_game: pd.DataFrame) -> pd.DataFrame:
+    """Real, position-specific defensive rate allowed: for each (team,
+    position), a rolling last-5/10-game rate of points/rebounds/assists that
+    team's opponents' players AT THAT POSITION scored against them --
+    replaces one blended team-wide DRtg with three real, separately-tracked
+    splits (vs. guards / forwards / centers), using each team's actual real
+    position field (confirmed clean: only G/F/C values, no messy hybrids).
+
+    Rate is normalized against the SCORING team's own game possessions
+    (matching compute_team_ratings' drtg convention: opponent points /
+    opponent possessions), then shifted+rolled per (team, position) so only
+    games strictly before the target game are used.
+    """
+    off_by_position = df.groupby(["game_id", "team", "position"], as_index=False).agg(
+        pos_points=("points", "sum"), pos_rebounds=("rebounds", "sum"), pos_assists=("assists", "sum")
+    )
+    off_by_position = off_by_position.merge(
+        team_game[["game_id", "team", "possessions", "game_date"]], on=["game_id", "team"]
+    )
+    for stat in POSITION_DEFENSE_STATS:
+        off_by_position[f"pos_{stat}_per100"] = off_by_position[f"pos_{stat}"] / off_by_position["possessions"] * 100
+
+    # defense_allowed: for each (game_id, defending team, position), what the
+    # OPPONENT's players at that position actually scored against them.
+    defense_allowed = opp_map.merge(
+        off_by_position.rename(columns={"team": "opponent"}),
+        on=["game_id", "opponent"],
+    )
+
+    defense_allowed = defense_allowed.sort_values(["team", "position", "game_date"])
+    grp = defense_allowed.groupby(["team", "position"])
+    for window in ROLLING_WINDOWS:
+        for stat in POSITION_DEFENSE_STATS:
+            defense_allowed[f"opp_drtg_vs_position_{stat}_last{window}"] = grp[f"pos_{stat}_per100"].transform(
+                lambda s: s.shift(1).rolling(window, min_periods=window).mean()
+            )
+
+    cols = ["game_id", "team", "position"] + [
+        f"opp_drtg_vs_position_{stat}_last{w}" for w in ROLLING_WINDOWS for stat in POSITION_DEFENSE_STATS
+    ]
+    return defense_allowed[cols]
+
+
+def compute_league_avg_pace(team_game: pd.DataFrame, windows: tuple[int, ...] = ROLLING_WINDOWS) -> pd.DataFrame:
+    """Real, rolling league-wide average pace as of each date -- NOT a single
+    all-time constant. Confirmed directly (2026-08-03): real season-average
+    game totals jumped from ~158-166 every year 2015-2025 to ~174.7 in 2026,
+    a genuine era shift -- a fixed historical league-average pace would go
+    stale exactly the same way the totals model did before isotonic
+    recalibration fixed it. Instead this is a trailing rolling mean of real
+    single-game possessions across ALL teams, ordered chronologically
+    league-wide (not per-team), shifted by one row to avoid leakage.
+
+    Window size is scaled by the number of real teams that season so a
+    "last N games" league-wide window represents roughly the same elapsed
+    real time as a per-team last-N window (a 5-game team window needs far
+    more league-wide rows to cover the same stretch of the season).
+    """
+    league = team_game[["game_id", "team", "game_date", "possessions"]].sort_values("game_date").reset_index(drop=True)
+    n_teams = team_game["team"].nunique()
+    for window in windows:
+        league_window = window * n_teams
+        league[f"league_avg_pace_last{window}"] = (
+            league["possessions"].shift(1).rolling(league_window, min_periods=league_window).mean()
+        )
+    return league[["game_id", "team"] + [f"league_avg_pace_last{w}" for w in windows]]
+
+
 def build_player_features(raw_path: Path) -> pd.DataFrame:
     df = load_and_clean(raw_path)
     opp_map = compute_opponent_map(df)
     df = df.merge(opp_map, on=["game_id", "team"])
+    df = compute_shooting_efficiency(df)
 
     team_game = compute_team_game_possessions(df)
     team_ratings = compute_team_ratings(team_game, opp_map)
+    league_avg_pace = compute_league_avg_pace(team_game)
 
     team_game = team_game.sort_values(["team", "game_date"])
     team_game["rest_days"] = team_game.groupby("team")["game_date"].diff().dt.days
 
     df = df.merge(team_game[["game_id", "team", "possessions", "rest_days"]], on=["game_id", "team"])
+    df = df.merge(league_avg_pace, on=["game_id", "team"])
 
-    stat_cols = ["points", "rebounds", "assists", "pra", "steals", "blocks", "turnovers", "minutes"]
+    # tpm (three-pointers made) included alongside the existing counting
+    # stats -- real data was already being parsed from every box score
+    # (load_and_clean's tpm/tpa split) but never turned into its own
+    # per-100/rolling feature or projection target before now.
+    stat_cols = ["points", "rebounds", "assists", "pra", "tpm", "steals", "blocks", "turnovers", "minutes"]
     for col in stat_cols:
         df[f"{col}_per100"] = df[col] / df["possessions"] * 100
 
@@ -161,7 +309,7 @@ def build_player_features(raw_path: Path) -> pd.DataFrame:
         # Explicit zero-rate feature: gives the low-quantile model a direct
         # signal instead of forcing it to infer zero-proneness indirectly
         # from minutes (which it was failing to do -- see assists fix).
-        for col in ["assists", "steals", "blocks"]:
+        for col in ["assists", "steals", "blocks", "tpm"]:
             df[f"{col}_zero_rate_last{window}"] = grp[col].transform(
                 lambda s: s.shift(1).eq(0).rolling(window, min_periods=window).mean()
             )
@@ -180,6 +328,39 @@ def build_player_features(raw_path: Path) -> pd.DataFrame:
         right_on=["opp_game_id", "opp_team"],
         how="left",
     )
+
+    # Dynamic Pace & Possessions layer: real head-to-head expected game pace
+    # (own x opp, normalized by the real rolling league-average pace) rather
+    # than a static pace average -- two above-average-pace teams playing each
+    # other should push the real expected pace higher than either team's own
+    # rolling average alone would suggest.
+    for window in ROLLING_WINDOWS:
+        df[f"expected_pace_last{window}"] = (
+            df[f"own_team_pace_last{window}"] * df[f"opp_team_pace_last{window}"]
+            / df[f"league_avg_pace_last{window}"]
+        )
+        # Each player's own real per-100 rate, scaled directly against this
+        # game's real expected possession count -- an explicit projected
+        # volume, not left for the tree model to reconstruct implicitly from
+        # separately-listed pace/rate features.
+        for col in ["points", "rebounds", "assists", "tpm"]:
+            df[f"{col}_projected_volume_last{window}"] = (
+                df[f"{col}_per100_last{window}"] / 100 * df[f"expected_pace_last{window}"]
+            )
+
+    # Defensive Matchup & Localized Splits (position-level, the real version
+    # of this layer -- see build_features module docstring history / session
+    # notes for why true play-type defense isn't available). Look up the
+    # OPPONENT's rolling defensive rate specifically against players at THIS
+    # player's own position, replacing the single blended opp_team_drtg with
+    # three real, separately-tracked splits.
+    position_defense = compute_position_defense(df, opp_map, team_game).rename(columns={"team": "pos_def_team"})
+    df = df.merge(
+        position_defense,
+        left_on=["game_id", "opponent", "position"],
+        right_on=["game_id", "pos_def_team", "position"],
+        how="left",
+    ).drop(columns=["pos_def_team"])
 
     return df
 

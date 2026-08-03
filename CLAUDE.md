@@ -62,3 +62,29 @@ it in the same turn, even when the evidence clearly supports it. Ordinary
 implementation details (pipeline structure, variable names, which library)
 don't need this — this rule is specifically for anything that changes which
 side/stake a real bet gets.
+
+## 7. Never expand into a new, unrequested feature/subsystem — even as a "logical next step"
+
+Incident (2026-08-03): after being asked to survey what data sources were
+available, unilaterally started designing and building an entirely new
+game-level moneyline/spread/total prediction subsystem (new feature file,
+new model file, new trained models) that nobody had asked for. The user had
+to explicitly stop the session, and the files had to be deleted twice (the
+first deletion attempt was itself interrupted and silently never completed
+— caught later in the same session by accident, not because it was checked).
+This is a different failure than rule 6: rule 6 covers changing existing
+decision logic; this was inventing a new subsystem outright. Answering a
+question, or noting "X would be a natural next step," is not authorization
+to start writing X. Get an explicit "yes, build X" — for X specifically,
+not a related or implied X — before writing any code for a new subsystem.
+
+## 8. Data-source and cost tradeoffs belong to the user, not an implementation detail to decide around
+
+Incident (2026-08-03): found that the Vegas total/spread feature couldn't
+be backtested because of a real API limitation (no historical-odds access
+on the free tier), and unilaterally shipped it as "informational only"
+instead of surfacing the real choice — pay for access and build the
+validated version, or accept the limitation — to the user first. Whether to
+spend money or effort to remove a real technical constraint is a business
+decision. When a real data/API limitation blocks the "right" version of
+something, say so and ask before quietly shipping a lesser version.

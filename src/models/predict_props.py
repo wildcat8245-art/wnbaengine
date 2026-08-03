@@ -26,9 +26,6 @@ import pandas as pd
 import requests
 
 from src.data import injuries_client
-from src.features.garbage_time import (
-    fit_blowout_minutes_curve, minutes_adjustment_ratio, MIN_MEANINGFUL_ADJUSTMENT,
-)
 from src.models.train_baseline_model import (
     FEATURE_COLS, POISSON_TARGETS, NEGATIVE_BINOMIAL_TARGETS,
     load_dataset, train_poisson_model, train_negative_binomial_model, train_quantile_models,
@@ -234,19 +231,15 @@ def main() -> int:
     else:
         print("No game-lines snapshot found -- board will not show Vegas total/spread context.")
 
-    # Garbage-Time & Blowout Risk model -- real isotonic fit (spread
-    # magnitude -> expected starter minutes) from real historical spread
-    # data (see garbage_time.py). NOT YET VALIDATED via the full bet-level
-    # backtest (deferred to end of session per explicit user instruction) --
-    # real, measured, monotonic relationship, but treat picks it touches as
-    # unconfirmed until that backtest runs, per CLAUDE.md rule 1.
-    blowout_model = fit_blowout_minutes_curve(
-        Path("data/raw/historical_spreads.csv"), Path("data/raw/player_boxscores_historical.csv")
-    )
-    if blowout_model is not None:
-        print("Garbage-Time model: real historical spread-to-minutes curve fitted.")
-    else:
-        print("Garbage-Time model: no real historical spread data yet -- board will not apply blowout adjustment.")
+    # DISABLED 2026-08-03: the Garbage-Time & Blowout Risk minutes adjustment
+    # was backtested (src/backtest/backtest_garbage_time.py) and came back
+    # mixed -- a real regression for points (MAE 4.811->4.819) and only
+    # tiny, plausibly-noise improvements for rebounds/assists/tpm (e.g.
+    # 2.049->2.047). Not strong enough evidence to keep live. Disabled
+    # rather than deleted -- garbage_time.py and its backtest are real,
+    # tested code kept for reference; do not re-enable without new evidence
+    # (a different fit, more data, or a narrower scope) that changes this.
+    blowout_model = None
 
     # Real live injury check -- see injuries_client.py. Restricted to teams
     # actually on today's slate (from the real odds data itself) so a
@@ -300,30 +293,11 @@ def main() -> int:
         if x_row.isna().any(axis=None):
             continue
 
-        # Garbage-Time & Blowout Risk adjustment: real, empirically-fit
-        # scaling of THIS player's own minutes_last5/10 (not a population
-        # replacement) when they were a real starter in their most recent
-        # game and today's real live spread indicates meaningful blowout
-        # risk. Feeds the already-trained model a lower minutes input for
-        # this specific game; the model's own learned minutes->stat
-        # relationship (from real historical data) does the rest, rather
-        # than a hand-crafted post-hoc rescaling of the output.
+        # DISABLED 2026-08-03: garbage-time/blowout-risk minutes scaling was
+        # here, backtested, and removed -- see the note near blowout_model
+        # above for the real numbers. blowout_note kept as an always-empty
+        # string since it's still referenced in the rationale/results below.
         blowout_note = ""
-        if blowout_model is not None and bool(latest.loc[player].get("starter", False)):
-            event_id = player_event.get(player)
-            game_line = vegas_by_event.get(event_id) if event_id else None
-            spread = game_line.get("home_spread") if game_line else None
-            if spread is not None and pd.notna(spread):
-                ratio = minutes_adjustment_ratio(blowout_model, abs(spread))
-                if ratio < MIN_MEANINGFUL_ADJUSTMENT:
-                    x_row["minutes_last5"] = x_row["minutes_last5"] * ratio
-                    x_row["minutes_last10"] = x_row["minutes_last10"] * ratio
-                    blowout_note = (
-                        f"Blowout-risk adjustment: real spread magnitude {abs(spread):.1f} -- "
-                        f"real historical starters play {ratio*100:.1f}% of normal minutes at this "
-                        f"spread level, this player's own minutes_last5/10 scaled accordingly "
-                        f"(NOT YET bet-level backtested, see CLAUDE.md rule 1). "
-                    )
 
         model = models_by_target[target]
         if hasattr(model, "predict_prob_over"):

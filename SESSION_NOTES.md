@@ -1,8 +1,8 @@
 # WNBA Player Prop System — Session State
 
-_Last updated: 2026-08-02 (midday session). Read this first if picking the
-project back up. §9 below is new since the 2026-08-01 save; §7 and §8 are new
-since the 2026-07-31 save._
+_Last updated: 2026-08-03. Read this first if picking the project back up.
+§10 below is new since the 2026-08-02 save; §9 is new since 2026-08-01;
+§7 and §8 are new since 2026-07-31._
 
 ## 1. What this is
 
@@ -23,6 +23,9 @@ src/data/
   odds_client.py               # the-odds-api.com: live player prop odds client
   fetch_daily_props.py         # daily snapshot of today's real prop odds (quota-safe)
   injuries_client.py           # wnba-api /injuries: live injury reports + usage-vacuum detection
+src/report/
+  build_board.py               # renders the latest predictions_*.csv into templates/board_template.html
+  grade_predictions.py         # joins saved predictions_*.csv boards to real box scores, grades win rate
 src/features/
   build_features.py           # rolling windows, per-100, opponent adjustment, rest/home
 src/models/
@@ -36,6 +39,11 @@ data/raw/                     # gitignored — regenerate by rerunning the fetch
   daily_props/props_YYYY-MM-DD.csv  # one snapshot per day fetch_daily_props.py was run
 data/processed/
   player_features.csv         # gitignored — output of build_features.py, 52,932 rows
+  predictions_YYYY-MM-DD.csv  # one saved snapshot per board run -- the record graded later
+  board_YYYY-MM-DD.html       # gitignored — build_board.py output, publish as a Claude Artifact
+  graded_predictions.csv      # gitignored — grade_predictions.py output, real win-rate history
+templates/
+  board_template.html         # locked-in board visual design (see §10) -- don't redesign ad hoc
 get_odds.py                    # OLD, pre-existing direct-DraftKings-scrape script.
                                 # Now confirmed BLOCKED (403, DK added bot protection).
                                 # Not used by anything below. Candidate for removal.
@@ -327,3 +335,69 @@ paper-citation framing (see §5), not to record its own feature work. Point
 this out again if a future session finds SESSION_NOTES.md lagging behind
 the actual code — check `git log` and the code itself, not just this file's
 own claims (per `CLAUDE.md` rule 5).
+
+## 10. 2026-08-03 session: board visualization, closed-loop grading, real calibration check
+
+1. **Live board run for real 2026-08-03 games** (SEA@NY, LVA@ATL, PHX@CHI) —
+   fetched fresh (569 real prop rows), 90 unique props evaluated, 55
+   recommended after all checks.
+
+2. **`templates/board_template.html` + `src/report/build_board.py`** — the
+   user saw the board rendered as a Claude Artifact, liked the visual design
+   (dark charcoal/gold trading-terminal look: top-picks rail with full
+   rationale text, sortable/filterable full table, expandable per-row
+   detail, both light/dark themes), and asked to lock that exact style in
+   permanently rather than have it redesigned each time. `build_board.py`
+   reads whatever `predictions_*.csv` + matching `daily_props/props_*.csv`
+   are most recent, fills the template's placeholders, and writes a
+   self-contained `data/processed/board_<date>.html` safe to publish as an
+   Artifact with no further editing. Do not hand-build a new report design
+   for this system without the user asking for a different look.
+
+3. **`src/report/grade_predictions.py` — the closed loop that was missing.**
+   Predictions were being saved (`predictions_*.csv`) and real box scores
+   were being re-fetched, but nothing ever checked one against the other.
+   This script joins every saved board to the player's real box score for
+   that exact game date and checks whether the picked side actually cleared
+   the line — real win rate vs. stated confidence, a real bankroll trace,
+   a per-market breakdown, and a check on whether flagged stay-away picks
+   were right to be excluded.
+   - Had to backfill `player_boxscores_historical.csv` first — it was
+     stale (last real game was 2026-07-30) — via
+     `fetch_historical_boxscores.py --start-year 2026 --end-year 2026`
+     (resumable, cheap on the wnba-api quota) to get real outcomes through
+     2026-08-02.
+   - **First real result** (2026-08-02 board — the only one gradable so
+     far, since 2026-08-03's games hadn't been played yet at the time this
+     was run): 58 recommended bets, real win rate **48.3%** vs **63.1%**
+     average stated confidence — a 14.8pp gap. Real bankroll trace: $1,000
+     → $920.04. Rebounds (47.1%) and assists (44.4%) worse than points
+     (52.2%). The 11 flagged stay-away picks with a real outcome would have
+     won only 36.4% — the trend-conflict/injury/usage-vacuum guards were
+     directionally right to exclude them.
+   - **Explicit caveat, stated to the user directly and worth repeating to
+     avoid over-reacting**: n=58 from a single day is nowhere near enough to
+     conclude the live system is miscalibrated — this is the same
+     small-sample-comparison trap this project already learned to avoid in
+     §7 (naive-proxy and median-vs-mean comparison mistakes). Do not treat
+     this one-day gap as proof of a live calibration problem in a future
+     session — pull the accumulated history from `graded_predictions.csv`
+     across many boards before drawing any real conclusion.
+
+4. **User raised a real, correct critique of the feature set**: no
+   head-to-head-vs-this-specific-opponent signal, no Vegas game
+   total/spread signal, no game-script/blowout-risk signal — only
+   *team-level* opponent D-rating/pace (rolling, from real box scores),
+   home/away, and rest days. Discussed and agreed: head-to-head is low
+   real value here (most players face a given opponent only 2-4x/season —
+   mostly noise, and the team-level opponent rating already captures most
+   of the real signal more reliably than a tiny per-matchup sample would).
+   Vegas game total/spread was agreed as the real, worthwhile gap — a
+   genuine market signal for pace/blowout risk the system currently ignores
+   entirely, even though the same the-odds-api key already used for player
+   props also carries it. **In progress as of this save**: adding game
+   total/spread as a feature — check whether historical odds are actually
+   available on this API key/tier before assuming it can be a *trained*
+   model feature versus only a live/display-time signal (the-odds-api's
+   historical endpoint is typically a separate paid tier from the standard
+   500/month plan this project uses).

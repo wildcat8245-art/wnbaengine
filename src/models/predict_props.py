@@ -27,6 +27,9 @@ import requests
 
 from src.data import injuries_client
 from src.features.on_off_splits import load_played_minutes, compute_on_off_split, MIN_OUT_GAMES
+from src.features.garbage_time import (
+    fit_blowout_minutes_curve, minutes_adjustment_ratio, MIN_MEANINGFUL_ADJUSTMENT,
+)
 from src.models.train_baseline_model import (
     FEATURE_COLS, POISSON_TARGETS, NEGATIVE_BINOMIAL_TARGETS,
     load_dataset, train_poisson_model, train_negative_binomial_model, train_quantile_models,
@@ -213,13 +216,14 @@ def main() -> int:
     # features. Read once here rather than per-row.
     raw_boxscores = load_played_minutes(Path("data/raw/player_boxscores_historical.csv"))
 
-    # Real live game-level Vegas total/spread -- informational context only,
-    # NOT wired into prob_over/EV/staking. This key's plan has no historical
-    # odds access (confirmed directly, HISTORICAL_UNAVAILABLE_ON_FREE_USAGE_PLAN),
-    # so there is no way to backtest a total/spread-based adjustment against
-    # real past outcomes -- per this project's own rule, nothing goes into the
-    # actual decision logic without that. Shown in the rationale so the human
-    # reading the board can weigh real blowout/pace risk themselves.
+    # Real live game-level Vegas total/spread. UPDATE 2026-08-03: the odds
+    # key was upgraded to a paid plan with real historical-odds access
+    # (archive starts 2022-05-21) -- the spread itself now also feeds the
+    # real Garbage-Time & Blowout Risk adjustment below, fit against that
+    # real historical data (fetch_historical_spreads.py). The total (and the
+    # spread when no blowout-risk adjustment applies) remain informational
+    # only, shown in the rationale so the human reading the board can weigh
+    # real pace/blowout risk themselves.
     game_line_files = sorted(glob.glob("data/raw/daily_game_lines/game_lines_*.csv"))
     vegas_by_event: dict[str, dict[str, object]] = {}
     player_event: dict[str, str] = {}
@@ -236,6 +240,20 @@ def main() -> int:
         print(f"Vegas game lines: {len(vegas_by_event)} game(s) with a real total/spread snapshot.")
     else:
         print("No game-lines snapshot found -- board will not show Vegas total/spread context.")
+
+    # Garbage-Time & Blowout Risk model -- real isotonic fit (spread
+    # magnitude -> expected starter minutes) from real historical spread
+    # data (see garbage_time.py). NOT YET VALIDATED via the full bet-level
+    # backtest (deferred to end of session per explicit user instruction) --
+    # real, measured, monotonic relationship, but treat picks it touches as
+    # unconfirmed until that backtest runs, per CLAUDE.md rule 1.
+    blowout_model = fit_blowout_minutes_curve(
+        Path("data/raw/historical_spreads.csv"), Path("data/raw/player_boxscores_historical.csv")
+    )
+    if blowout_model is not None:
+        print("Garbage-Time model: real historical spread-to-minutes curve fitted.")
+    else:
+        print("Garbage-Time model: no real historical spread data yet -- board will not apply blowout adjustment.")
 
     # Real live injury check -- see injuries_client.py. Restricted to teams
     # actually on today's slate (from the real odds data itself) so a
@@ -285,9 +303,34 @@ def main() -> int:
         if over_row.empty or under_row.empty:
             continue  # need both sides' real odds to evaluate fairly
 
-        x_row = latest.loc[[player], FEATURE_COLS]
+        x_row = latest.loc[[player], FEATURE_COLS].copy()
         if x_row.isna().any(axis=None):
             continue
+
+        # Garbage-Time & Blowout Risk adjustment: real, empirically-fit
+        # scaling of THIS player's own minutes_last5/10 (not a population
+        # replacement) when they were a real starter in their most recent
+        # game and today's real live spread indicates meaningful blowout
+        # risk. Feeds the already-trained model a lower minutes input for
+        # this specific game; the model's own learned minutes->stat
+        # relationship (from real historical data) does the rest, rather
+        # than a hand-crafted post-hoc rescaling of the output.
+        blowout_note = ""
+        if blowout_model is not None and bool(latest.loc[player].get("starter", False)):
+            event_id = player_event.get(player)
+            game_line = vegas_by_event.get(event_id) if event_id else None
+            spread = game_line.get("home_spread") if game_line else None
+            if spread is not None and pd.notna(spread):
+                ratio = minutes_adjustment_ratio(blowout_model, abs(spread))
+                if ratio < MIN_MEANINGFUL_ADJUSTMENT:
+                    x_row["minutes_last5"] = x_row["minutes_last5"] * ratio
+                    x_row["minutes_last10"] = x_row["minutes_last10"] * ratio
+                    blowout_note = (
+                        f"Blowout-risk adjustment: real spread magnitude {abs(spread):.1f} -- "
+                        f"real historical starters play {ratio*100:.1f}% of normal minutes at this "
+                        f"spread level, this player's own minutes_last5/10 scaled accordingly "
+                        f"(NOT YET bet-level backtested, see CLAUDE.md rule 1). "
+                    )
 
         model = models_by_target[target]
         if hasattr(model, "predict_prob_over"):
@@ -453,6 +496,7 @@ def main() -> int:
             f"{' -- ' + injury_note if injury_note else ''}. "
             + (f"Usage vacuum: {vacuum_note}. " if vacuum_note else "")
             + (f"{vegas_note} " if vegas_note else "")
+            + (blowout_note if blowout_note else "")
             + f"DECISION: picked {side} because the actual probability of clearing {line} was "
             f"{prob_over*100:.1f}% Over / {(1-prob_over)*100:.1f}% Under, computed by the {engine_desc}. "
             f"EV {ev:.3f} at {odds:.2f} decimal odds on {book}."
@@ -474,6 +518,7 @@ def main() -> int:
             "injury_note": injury_note,
             "usage_vacuum": vacuum_note,
             "vegas_note": vegas_note,
+            "blowout_adjustment": blowout_note,
             "monte_carlo_over_pct": f"{prob_over * 100:.1f}%",
             "monte_carlo_pool": mc_source,
             "pick_pct": f"{prob * 100:.1f}% {side}",

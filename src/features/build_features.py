@@ -362,6 +362,24 @@ def build_player_features(raw_path: Path) -> pd.DataFrame:
         how="left",
     ).drop(columns=["pos_def_team"])
 
+    # Garbage-Time & Blowout Risk Modeling: a real pre-game expected-margin
+    # proxy, usable across the FULL 2015-2026 history (real historical Vegas
+    # spreads only exist from 2022-05-21 onward -- see
+    # fetch_historical_spreads.py for the real-spread version used to
+    # validate this proxy). Net rating differential (own - opp, each
+    # ORtg-DRtg) is a real, standard point-margin predictor; scaling it by
+    # the real expected game pace (reusing expected_pace_last{w} from the
+    # Dynamic Pace layer, possessions/100) converts it from a per-100-
+    # possession rate into a real expected POINT margin for this specific
+    # matchup, not just a relative strength score.
+    for window in ROLLING_WINDOWS:
+        own_net = df[f"own_team_ortg_last{window}"] - df[f"own_team_drtg_last{window}"]
+        opp_net = df[f"opp_team_ortg_last{window}"] - df[f"opp_team_drtg_last{window}"]
+        df[f"expected_margin_proxy_last{window}"] = (
+            (own_net - opp_net) * df[f"expected_pace_last{window}"] / 100
+        )
+        df[f"abs_expected_margin_proxy_last{window}"] = df[f"expected_margin_proxy_last{window}"].abs()
+
     return df
 
 

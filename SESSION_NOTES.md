@@ -940,8 +940,19 @@ over what's built) and the copula/parlay idea would be a new, unrequested
 subsystem (rule 7) requiring data (on-court joint lineup tracking) this
 project doesn't currently have a pipeline for. The user then separately,
 explicitly asked to adapt the copula idea using this project's own real
-data/models rather than the literal content — that adapted work has not
-been started yet as of this save.
+data/models rather than the literal content.
+
+**Resolved, later same session**: walked through what a copula is actually
+FOR (pricing the JOINT probability of multiple correlated legs together —
+e.g. a same-game parlay — instead of naively multiplying independent
+probabilities) and the real fact that this board only ever prices single,
+independent legs, never combos. A copula has nothing to correct for a
+single leg — there's no second outcome to correlate against. User's
+explicit response: **"SKIP IT."** Do not build a copula/correlated-outcome
+simulator without a real new request specifically for same-game parlay/
+combo betting first (that would be new scope — real new bet types on the
+board, a real correlation matrix estimated from historical box scores,
+none of which exist today).
 
 ## 14. 2026-08-03 (continued further): stacks built and validated for all 7 targets, wired into the live board
 

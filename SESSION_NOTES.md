@@ -1,10 +1,12 @@
 # WNBA Player Prop System — Session State
 
-_Last updated: 2026-08-03 (late session, continued). Read this first if
-picking the project back up. **§11 is new and long — read it in full before
-touching predict_props.py, train_baseline_model.py, or build_features.py.**
-§10 is new since the 2026-08-02 save; §9 since 2026-08-01; §7/§8 since
-2026-07-31._
+_Last updated: 2026-08-03 (late session, final). Read this first if
+picking the project back up. **§12 is new — it documents real backtest
+results for everything in §11, and TWO REVERTS (on/off splits, garbage-time)
+that §11 does not reflect. Read §12 before trusting anything §11 says is
+live.** §11 is long — read it in full before touching predict_props.py,
+train_baseline_model.py, or build_features.py. §10 is new since the
+2026-08-02 save; §9 since 2026-08-01; §7/§8 since 2026-07-31._
 
 ## 1. What this is
 
@@ -25,25 +27,40 @@ src/data/
   odds_client.py               # the-odds-api.com: live player prop odds client
   fetch_daily_props.py         # daily snapshot of today's real prop odds (quota-safe)
   injuries_client.py           # wnba-api /injuries: live injury reports + usage-vacuum detection
+  fetch_historical_spreads.py  # real historical spread pull (2022-05-21+), matches to our real games
+  fetch_play_by_play.py        # real historical shot-event pull (zone classification, raw only)
+  fetch_substitution_events.py # real substitution-event pull, recent-season sample
 src/report/
   build_board.py               # renders the latest predictions_*.csv into templates/board_template.html
   grade_predictions.py         # joins saved predictions_*.csv boards to real box scores, grades win rate
+  track_clv.py                 # real Closing Line Value vs. actual closing odds (needs paid historical access)
+  check_coefficient_drift.py   # PROPOSAL-ONLY refit check for NB2 alpha / eFG-TS shrinkage K, never auto-applies
 src/features/
-  build_features.py           # rolling windows, per-100, opponent adjustment, rest/home
+  build_features.py           # rolling windows, per-100, opponent adjustment, rest/home, pace,
+                                # position defense, shooting-efficiency shrinkage (see §11)
+  on_off_splits.py             # real teammate on/off split calc -- NOT wired into predict_props.py (see §12, reverted)
+  garbage_time.py              # real spread-to-minutes isotonic fit -- NOT wired into predict_props.py (see §12, disabled)
 src/models/
   train_baseline_model.py     # quantile / Poisson / Negative Binomial models + calibration check
   predict_props.py            # live board: real odds + model -> Kelly-sized picks
 src/backtest/
-  backtest_props.py           # walk-forward backtest + falsification test
+  backtest_props.py           # walk-forward backtest + falsification test (all 7 targets, see §12)
+  backtest_garbage_time.py     # real backtest of the (now-disabled) blowout minutes adjustment
+  backtest_on_off_splits.py    # real backtest of the (now-reverted) on/off split mechanism
 data/raw/                     # gitignored — regenerate by rerunning the fetch scripts
-  player_boxscores_historical.csv   # 63,672 rows, 2,759 games, 563 players, 2015-2026
+  player_boxscores_historical.csv   # ~63,700 rows, 2,768 games, through 2026-08-02
   game_season_types.csv             # 3,017 games -> season type + corrected US date
   daily_props/props_YYYY-MM-DD.csv  # one snapshot per day fetch_daily_props.py was run
+  daily_game_lines/game_lines_YYYY-MM-DD.csv  # real game-level total/spread snapshot
+  historical_spreads.csv       # real 2022-05-21+ spreads, 1,008 games (fetch_historical_spreads.py)
+  shot_events_historical.csv   # 376,094 real shot events, 2,762/2,768 games (fetch_play_by_play.py) -- RAW ONLY, unused downstream (see §11.6)
+  substitution_events_recent.csv  # 27,867 real substitution events, 535 games 2025-2026 (fetch_substitution_events.py)
 data/processed/
-  player_features.csv         # gitignored — output of build_features.py, 52,932 rows
+  player_features.csv         # gitignored — output of build_features.py
   predictions_YYYY-MM-DD.csv  # one saved snapshot per board run -- the record graded later
   board_YYYY-MM-DD.html       # gitignored — build_board.py output, publish as a Claude Artifact
   graded_predictions.csv      # gitignored — grade_predictions.py output, real win-rate history
+  clv_report.csv              # gitignored — track_clv.py output, real Closing Line Value history
 templates/
   board_template.html         # locked-in board visual design (see §10) -- don't redesign ad hoc
 get_odds.py                    # OLD, pre-existing direct-DraftKings-scrape script.
@@ -665,3 +682,127 @@ trained, isotonic-recalibrated models with **no live market to attach to**
 - Six historical games (see 11.6) failed the play-by-play pull on
   transient timeouts — rerun the fetcher to pick them up before treating
   the shot-event dataset as fully complete.
+
+## 12. 2026-08-03 (final): real backtests for everything, two real reverts
+
+**Read this before trusting anything in §11 as live.** The user asked for
+every piece built tonight to be properly backtested, not just the core
+per-stat models. Two of §11's pieces did not survive that and were removed
+from the live decision path as a direct result. This section is the
+authoritative current state — where it disagrees with §11, this section
+wins.
+
+### 12.1 Core 7-target backtest (confirms §11's new features are real, and confirms all engine routing)
+
+`backtest_props.py` (already generic over `TARGETS`, needed no changes) run
+across all 7 real targets, using the full current feature set — meaning the
+Dynamic Pace, position-defense, and shooting-efficiency-shrinkage features
+from §11 ARE exercised by this, not just added and hoped for:
+
+| target | parametric bankroll | empirical MC bankroll | current live routing | confirmed correct? |
+|---|---|---|---|---|
+| points | 119,748 | 147,078 (wins) | empirical MC | yes |
+| rebounds | 519,639 (wins) | 20,322 | parametric | yes |
+| assists | 20,204 (wins) | 5,938 | parametric | yes |
+| pra | 588,113 (wins) | 110,604 | parametric | yes |
+| tpm | 4,882 (wins) | 2,152 | parametric (by omission) | yes — first real test, confirms the default was right |
+| steals | 7,568 (wins) | 411 (LOSES money) | parametric | yes |
+| blocks | 875 (loses) | 715 (loses) | parametric | **both engines lose money — real, unresolved concern, see below** |
+
+`EMPIRICAL_MC_TARGETS = {"points"}` needs **no changes** — every current
+target's routing is now confirmed correct, including the three added
+tonight (previously untested by omission, not by a real comparison).
+
+**Real, unresolved concern: blocks.** Both engines finish BELOW the $1,000
+starting bankroll (875 and 715) — the only target where this happens. Only
+218-366 bets placed (far thinner than every other market). Two real
+possible explanations, not yet distinguished: (a) blocks genuinely has no
+real backtestable edge at this synthetic-line construction, or (b) the
+sample is too thin/noisy to conclude anything yet. Do not present blocks
+picks with the same confidence as other markets until this is investigated
+further — it hasn't been tonight.
+
+### 12.2 Garbage-time/blowout-risk adjustment — backtested, DISABLED
+
+Built in §11 with no dedicated backtest (backtest_props.py's simulation
+path never calls it). Real, dedicated backtest built
+(`backtest_garbage_time.py`): real 2025-2026 starters with a real
+historical spread (4,012 rows), 1,059 with a meaningful real adjustment
+(ratio < 0.98). Result:
+
+| target | unadjusted MAE | adjusted MAE | verdict |
+|---|---|---|---|
+| points | 4.811 | 4.819 | adjustment HURTS |
+| rebounds | 2.049 | 2.047 | tiny help, plausibly noise |
+| assists | 1.522 | 1.516 | tiny help, plausibly noise |
+| tpm | 0.879 | 0.878 | tiny help, plausibly noise |
+
+Not strong enough evidence to keep live — one real target got worse, three
+showed effects too small to trust. **DISABLED** in `predict_props.py`
+(`blowout_model = None`, dead downstream logic removed, commit `666d8be`).
+`garbage_time.py` and its backtest are kept as real, tested code for
+reference — do not re-enable without new evidence (different fit, more
+real data, or narrower scope) that changes this real result.
+
+### 12.3 On/off splits — backtested TWICE, REVERTED
+
+First backtest (train ≤2024, test 2025-2026 — the standard split used
+everywhere else in this project): real out-of-sample correlation **-0.001**,
+sign agreement **46.8%** (worse than chance). Suspected cause: a
+multi-year gap doesn't suit something this roster-dependent (real trades/
+coaching changes/development change who benefits from a real absence
+year to year).
+
+**Real fix attempted**: rewrote the backtest to validate IN-SEASON instead
+— first half of a real season predicts the second half of the SAME season
+(a recent, roster-stable window, matching how this should actually be used
+live). Real result on a bigger sample (797 vs. 555 triplets): correlation
+**0.019**, sign agreement **51.4%** — still no real signal, barely above
+chance either way.
+
+**Conclusion, tested not assumed**: the problem isn't the validation
+window, it's the mechanism itself — a specific (player, teammate) pair's
+on/off split estimated from only 5-8 real games per condition (the real
+minimum threshold) is too noisy relative to a player's own normal
+game-to-game variance to carry real signal at this sample size.
+
+**REVERTED** in `predict_props.py` (commit `f6352fd`) — the usage-vacuum
+section is back to the qualitative-only flag (real, sourced from the
+injury report's own text naming a beneficiary — this part was never
+invalidated, only the added quantified "REAL SPLIT" number was).
+`on_off_splits.py` and both backtest versions are kept as real, tested
+code — do not re-add the quantified version without a genuinely different
+approach (not just a different window) that's actually tested first.
+
+### 12.4 Real bug fixed the same pass: `grade_predictions.py` didn't know about 3PM
+
+`MARKET_TO_STAT_COL` was missing `"tpm"` entirely — any saved board with
+real 3PM picks (every board since tonight's 3PM launch) would have had
+those rows silently come back `graded=False` instead of being checked
+against real outcomes. Fixed (commit `f6352fd`): added the mapping and
+the raw made/attempted parse needed to compute a real `tpm` column from
+`threePointFieldGoalsMade-threePointFieldGoalsAttempted`.
+
+### 12.5 What's actually live right now (the real, current truth)
+
+- **Live and validated tonight**: points/rebounds/assists/pra/tpm/steals/
+  blocks models with the full Dynamic Pace + position-defense + shooting-
+  shrinkage feature set; engine routing (`EMPIRICAL_MC_TARGETS`) confirmed
+  correct for all 7.
+- **Live but NOT validated / real open concern**: blocks (both engines
+  losing money in backtest — see 12.1).
+- **Built, tested, explicitly NOT live**: garbage-time/blowout adjustment
+  (disabled, 12.2), on/off split quantified number (reverted, 12.3), shot-
+  zone breakdown (raw data only, nothing built on top, §11.6), the paid
+  historical-odds capability itself (confirmed working, not yet used for
+  a real player-prop-vs-real-historical-line backtest).
+- **New monitoring tools, working, real first results**: `track_clv.py`
+  (+1.43% average CLV, beat the real closing line 60.4% of 53 tracked
+  bets), `check_coefficient_drift.py` (no meaningful drift found on first
+  run; proposal-only, never auto-applies).
+- **Rejected outright, real evidence against building at all**: full 5-man
+  lineup splits, "contest level" shooting defense, altitude effects,
+  literal possession-by-possession Monte Carlo simulator, context-weighted
+  Monte Carlo resampling (all explicitly discussed and declined by the
+  user or shown to be unbuildable/unvalidated — see §11 for the specific
+  reasoning on each, not repeated here).

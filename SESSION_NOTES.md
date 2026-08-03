@@ -1079,3 +1079,25 @@ deliberate wiring smoke test confirming correct `hasattr` routing before
 the full live run. If a future session wants `backtest_props.py` itself
 to test the stacks, it would need the same training-function swap made
 here.
+
+### 14.5 Verified comparison: today's final system vs. the original empirical MC engine
+
+Asked and answered with real numbers, not impression, same $1,000 starting
+bankroll and methodology throughout:
+
+| target | original (empirical MC, live before this session's fixes, 2026-08-02 numbers) | today (validated ensemble stack) | change |
+|---|---|---|---|
+| points | 264,566 | 503,569 | +90% |
+| rebounds | 384,758 | 1,227,553 | +219% |
+| assists | 21,357 | 100,640 | +371% |
+| tpm | n/a (market didn't exist yet) | 12,026 | new |
+
+Attributed to three separately-verified causes, not one unexplained jump:
+new real features (pace/position-defense/shooting-shrinkage) added this
+session, the quantile-regressor capacity fix (§13.1 — was actively making
+points/PRA worse before being caught), and the ensemble stacking itself
+(§14.1-14.2). Standard caveat applies to all backtest numbers in this
+project equally: the synthetic line (no real historical prop lines exist
+anywhere) means these figures show the model beating a naive last-5-average
+baseline by a real, large margin — not a literal real-money guarantee
+against actual sportsbook lines.

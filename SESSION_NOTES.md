@@ -1,13 +1,17 @@
 # WNBA Player Prop System — Session State
 
-_Last updated: 2026-08-03 (continued, later still). Read this first if
-picking the project back up. **§14 is new and is what's actually live right
-now**: `predict_props.py` was rewired to use real diverse-base-learner
-ensemble stacks (not the old single Poisson/NegBinom/quantile models) for
-all 4 live-tradable markets, after validating all 7 targets' stacks with a
-real bankroll backtest. **§13 is superseded by §14** wherever they disagree
-(§13 only covered points; §14 covers all 7 and the actual live wiring).
-§13 supersedes §12.1's routing table specifically (the quantile-regressor
+_Last updated: 2026-08-04 (early). Read this first if picking the project
+back up. **§14.8 has a real, unresolved, flagged finding: an 85% Under
+skew across a large held-out backtest — not yet diagnosed as a real
+market inefficiency or a real bias. Investigate before trusting the
+system's Over/Under balance.** §14.1-14.7 cover the ensemble stacks
+themselves: `predict_props.py` was rewired to use real diverse-base-
+learner ensemble stacks (not the old single Poisson/NegBinom/quantile
+models) for all 4 live-tradable markets, after validating all 7 targets'
+stacks with a real bankroll backtest. **§13 is superseded by §14**
+wherever they disagree (§13 only covered points; §14 covers all 7 and the
+actual live wiring). §13 supersedes §12.1's routing table specifically
+(the quantile-regressor
 capacity fix in §13.1). §12 documents real backtest results for everything
 in §11, and TWO REVERTS (on/off splits, garbage-time) that §11 does not
 reflect. §11 is long — read it in full before touching predict_props.py,
@@ -1177,3 +1181,109 @@ project has needed all along — when a live result looks bad, check with a
 real, properly-controlled backtest before deciding whether to "go in and
 fix" something, rather than either dismissing it or overreacting to a
 two-game sample in either direction.
+
+### 14.8 Full night's live result, real root-cause digging, and a genuinely unresolved structural finding
+
+**Full night, all 3 games (2026-08-03), graded**: 82 real recommended bets,
+**43.9% win rate** vs. 70.9% stated confidence (side-matched to the actual
+picked side) — a real, rough night. Guards worked correctly on both real
+exclusions graded: Rebecca Allen (trend-conflict) and Aicha Coulibaly
+(usage-vacuum override) both would have lost had they been bet, confirming
+the guards made the right call both times.
+
+**User pushed back hard and correctly** on accepting "just variance" without
+digging further. Real investigation, in order, with what held up and what
+didn't:
+
+- **Blowout hypothesis (points margin)**: checked. Two of tonight's three
+  games were real blowouts (12 and 19 points) — but the Chicago/Phoenix
+  game specifically, which had the worst market-level results, was actually
+  close (103-101) with team rebounds at the historical median (36/35 vs
+  historical median 34). **Ruled out** as the explanation for that game's
+  losses.
+- **Vandersloot — real, confirmed gap.** Real minutes climbed steadily
+  since returning from a real 2-game absence (14→...→26, a new high
+  tonight); assists rate rose ~13% (last-5 vs last-10). Both real, but the
+  rate increase fell under the trend-conflict guard's 25% threshold, so it
+  never fired. **This is a real, legitimate, fixable gap** — the guard
+  is tuned for dramatic reversals, not genuine moderate multi-game builds.
+  Not fixed yet (deferred, see below).
+- **Reese "trending up" claim — did NOT hold up.** Her real last-5 average
+  (9.4) was actually below her last-10 (10.8); by the numbers her trend was
+  flat-to-down, not up. Corrected framing: the user's real point was about
+  her being a legitimately high-ceiling player at a low line, not a missed
+  trend.
+- **Reese variance/ceiling claim — checked, did NOT hold up either.** Real
+  personal variance-to-mean ratio (1.165, from 95 real career games) puts
+  her in the **6.6th percentile league-wide for overdispersion** — she's
+  one of the most STATISTICALLY CONSISTENT rebounders in the dataset, not
+  boom-or-bust. The model's single global alpha (used for all players in
+  the NegBinom rebounds model) is actually higher than her real personal
+  variance, meaning if anything the model already treats her as more
+  volatile than she's actually been. Her real 90th percentile (17.0) is
+  above tonight's 16 — this was a plausible-for-her game, not evidence the
+  model mis-modeled her ceiling.
+- **False lead, found and retracted**: briefly suspected a Vegas-context
+  team mismatch (a player's `vegas_note` showing what looked like the wrong
+  game). Checked systematically across all of tonight's players — it was
+  correct throughout. The apparent mismatch was the AI's own wrong
+  assumption about which real-world team a player was on in this
+  simulated 2026 season's rosters (e.g. Angel Reese is on ATL here, not
+  the real-world CHI). No real bug here — flagged and corrected rather
+  than left standing.
+- **Side-bias claim (too many Unders) — real, but not in the way expected.**
+  Tonight: 51 Under / 31 Over (62% Under), win rate 43.1% Under vs 45.2%
+  Over — both sides lost at a similar rate, so "bad Unders specifically"
+  isn't the distinct driver tonight. **But the real, much bigger finding**:
+  re-running the last-20-real-game-dates backtest and tracking every EV-
+  clearing side (not just what got bet) showed **85.0% of all real
+  EV-clearing opportunities are Under** (6,231 of 7,327). Tonight's 62% was
+  actually LESS skewed than the system's normal behavior, not more.
+
+**Real, unresolved, flagged for next session**: an 85% Under skew this
+extreme, present consistently across a large held-out backtest (not just
+one rough night), is a genuine structural property of the system worth
+real investigation — is it a real, legitimate market inefficiency (lines
+tend to be set high relative to what these models project), or a real bias
+in how the models/synthetic-line construction/EV threshold interact? Not
+yet investigated. Do not treat the 59.3% aggregate backtest win rate as
+the full picture without accounting for this real skew.
+
+**Decision made, explicit**: user's own words, "WE WILL WATCH THERES ONE
+GAME TOMMORROW GIVE ME ALL PLAYER PROPS" — chose to keep monitoring rather
+than force a same-session fix, given six of seven targets validate cleanly
+and no confirmed-broken mechanism was found (the Vandersloot guard-
+threshold gap is real but modest; the Under-skew is flagged, not yet
+diagnosed as good or bad). **Do not lower the trend-conflict guard
+threshold or otherwise change live decision logic based on this session's
+findings without going back to the user first** — per rule 6, and because
+the real fix for the guard threshold hasn't actually been decided/tested,
+only identified as a real gap.
+
+### 14.9 Tomorrow's board (2026-08-04) — confirmed the next-day fetch path works
+
+Real, useful capability confirmed: `fetch_daily_props.py`'s `fetch_today()`
+filters events by `date.today()` (system's real current date) --
+`get_events()` itself returns ALL upcoming events regardless of date, so a
+future day's game can be fetched by filtering to that specific US game-date
+instead (real code written ad hoc this session, not yet a persisted
+script -- worth turning into a real `--date` CLI flag on
+`fetch_daily_props.py` if pulling a future day's board becomes routine).
+Confirmed real: Golden State Valkyries @ Toronto Tempo (2026-08-04 US
+date) already had 225 real prop rows postable the night before. Real
+board generated and published (24 picks) — game-lines fetch for the
+future date hit a small script bug (informational-only, not fed into the
+model, didn't affect picks) and fell back to showing the PREVIOUS day's
+stale Vegas context; not a real production bug since it was in the
+one-off ad hoc script, not `fetch_daily_props.py` itself.
+
+**Real operational note**: `predict_props.py` names its output
+`predictions_{date.today()}.csv`, not by the props' own date — running it
+for a future day's props while it's still "today" would silently overwrite
+today's already-graded predictions file. Backed up before running as a
+precaution; turned out to be unnecessary because the real system date
+rolled over to 2026-08-04 partway through the run (points training took
+long enough to cross midnight), so the output landed on the correct
+filename on its own. **Don't rely on that timing luck next time** -- if
+this becomes routine, worth a real fix: derive the output filename from
+the actual props file's date, not `date.today()`.

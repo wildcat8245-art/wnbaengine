@@ -15,11 +15,25 @@ prediction loop would redo the same expensive work multiple times per pick.
 
 from __future__ import annotations
 
+from datetime import date
+from pathlib import Path
+
+import joblib
 import numpy as np
 import pandas as pd
 from scipy.stats import nbinom, poisson
 from sklearn.ensemble import GradientBoostingRegressor, HistGradientBoostingRegressor, RandomForestRegressor
 from sklearn.linear_model import PoissonRegressor, QuantileRegressor, Ridge
+
+# Real operational cost found 2026-08-03: retraining all 4 live stacks from
+# scratch on every single predict_props.py run took ~20-30 minutes (mostly
+# points' LP-solver-based QuantileRegressor step) -- unusable if the user
+# wants to pull a fresh board more than once in an evening. Fix: cache each
+# trained stack to disk after training, keyed by (target, today's date), and
+# reuse it for any run later the same day instead of retraining. This does
+# NOT change what any pick is -- same training data (today's "all available
+# history"), same math -- it only avoids repeating identical work.
+MODEL_CACHE_DIR = Path("data/processed/model_cache")
 
 from src.backtest.backtest_count_ensemble_stack import prob_over as count_prob_over
 from src.backtest.backtest_count_ensemble_stack import stack_predict_rate, train_rate_stack
@@ -80,9 +94,26 @@ class StackedQuantileModel:
         return prob_over_from_quantiles(self._blended(x_row), line)
 
 
+def _cache_path(kind: str, target: str) -> Path:
+    return MODEL_CACHE_DIR / f"{kind}_{target}_{date.today().isoformat()}.joblib"
+
+
+def _load_or_train(kind: str, target: str, train_fn):
+    path = _cache_path(kind, target)
+    if path.exists():
+        print(f"  (using today's cached {target} stack -- {path.name})")
+        return joblib.load(path)
+    model = train_fn()
+    MODEL_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    joblib.dump(model, path)
+    return model
+
+
 def train_stacked_quantile_model(train: pd.DataFrame, target: str) -> StackedQuantileModel:
-    gbm_models, rf, lin_models, meta_models = train_stack(train, target)
-    return StackedQuantileModel(gbm_models, rf, lin_models, meta_models)
+    def _train():
+        gbm_models, rf, lin_models, meta_models = train_stack(train, target)
+        return StackedQuantileModel(gbm_models, rf, lin_models, meta_models)
+    return _load_or_train("quantile", target, _train)
 
 
 class _RateCacheMixin:
@@ -139,7 +170,9 @@ class StackedNegBinomRateModel(_RateCacheMixin):
 
 
 def train_stacked_rate_model(train: pd.DataFrame, target: str):
-    gbm, rf, glm, meta, alpha = train_rate_stack(train, target)
-    if target in NEGATIVE_BINOMIAL_TARGETS:
-        return StackedNegBinomRateModel(gbm, rf, glm, meta, alpha, target)
-    return StackedPoissonRateModel(gbm, rf, glm, meta, target)
+    def _train():
+        gbm, rf, glm, meta, alpha = train_rate_stack(train, target)
+        if target in NEGATIVE_BINOMIAL_TARGETS:
+            return StackedNegBinomRateModel(gbm, rf, glm, meta, alpha, target)
+        return StackedPoissonRateModel(gbm, rf, glm, meta, target)
+    return _load_or_train("rate", target, _train)

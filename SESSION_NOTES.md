@@ -1101,3 +1101,27 @@ project equally: the synthetic line (no real historical prop lines exist
 anywhere) means these figures show the model beating a naive last-5-average
 baseline by a real, large margin — not a literal real-money guarantee
 against actual sportsbook lines.
+
+### 14.6 Model caching — automatic, no action needed
+
+Real operational problem found the same day the stacks went live: every
+`predict_props.py` run retrained all 4 stacks from scratch (~20-30 minutes,
+mostly the points stack's LP-solver-based `QuantileRegressor` step) — fine
+for one board a day, unusable for pulling a fresh board more than once.
+
+**Fixed, and this is now automatic behavior, not something to rebuild or
+ask about**: `src/models/ensemble_stacks.py`'s `train_stacked_quantile_model`/
+`train_stacked_rate_model` cache each trained stack to
+`data/processed/model_cache/{kind}_{target}_{YYYY-MM-DD}.joblib` right
+after training. Any later run the SAME calendar day loads the cache
+(near-instant) instead of retraining. The cache key includes today's date,
+so it correctly forces a fresh retrain on new history every morning rather
+than silently serving a stale model forever. Verified round-trip: cached
+and freshly-trained models produce byte-identical predictions.
+
+**What this means in practice**: the FIRST board pull each day still takes
+the full ~20-30 minutes (real, unavoidable — that's the actual training
+cost). Every board pull after that, same day, is fast. Nothing needs to be
+done to enable this — it's the default behavior of the training functions
+now. `data/processed/model_cache/` is gitignored (regenerable, date-scoped,
+not source).

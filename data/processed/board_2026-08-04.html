@@ -1,0 +1,636 @@
+<title>WNBA Prop Board — 2026-08-04</title>
+<style>
+  :root {
+    --bg: #14161c;
+    --surface: #1b1e27;
+    --surface-alt: #21242e;
+    --surface-raised: #262a35;
+    --border: #2c303c;
+    --text: #e9e6de;
+    --text-muted: #999ca8;
+    --text-faint: #6b6e7a;
+    --accent: #d9a441;
+    --accent-dim: #8a6a2f;
+    --good: #5cae7c;
+    --good-bg: rgba(92, 174, 124, 0.12);
+    --danger: #d0685a;
+    --danger-bg: rgba(208, 104, 90, 0.12);
+    --neutral-chip: #4a4e5c;
+    --shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    color-scheme: dark;
+  }
+  :root[data-theme="light"] {
+    --bg: #f1f2f5;
+    --surface: #ffffff;
+    --surface-alt: #f7f8fa;
+    --surface-raised: #ffffff;
+    --border: #dcdee4;
+    --text: #1b1d24;
+    --text-muted: #5b5e6b;
+    --text-faint: #888b96;
+    --accent: #a6791f;
+    --accent-dim: #c9a35b;
+    --good: #2f8b57;
+    --good-bg: rgba(47, 139, 87, 0.1);
+    --danger: #b23a2e;
+    --danger-bg: rgba(178, 58, 46, 0.1);
+    --neutral-chip: #c7cad2;
+    --shadow: 0 8px 24px rgba(20, 22, 30, 0.08);
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --bg: #f1f2f5;
+      --surface: #ffffff;
+      --surface-alt: #f7f8fa;
+      --surface-raised: #ffffff;
+      --border: #dcdee4;
+      --text: #1b1d24;
+      --text-muted: #5b5e6b;
+      --text-faint: #888b96;
+      --accent: #a6791f;
+      --accent-dim: #c9a35b;
+      --good: #2f8b57;
+      --good-bg: rgba(47, 139, 87, 0.1);
+      --danger: #b23a2e;
+      --danger-bg: rgba(178, 58, 46, 0.1);
+      --neutral-chip: #c7cad2;
+      --shadow: 0 8px 24px rgba(20, 22, 30, 0.08);
+      color-scheme: light;
+    }
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    margin: 0;
+    padding: 0 0 4rem 0;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .mono {
+    font-family: ui-monospace, "Cascadia Code", "SF Mono", Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .display {
+    font-family: system-ui, sans-serif;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+  }
+
+  a { color: inherit; }
+
+  /* ---------- header ---------- */
+  header.topbar {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+    padding: 1.1rem 2rem;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+  }
+  .topbar-left { display: flex; align-items: baseline; gap: 0.9rem; flex-wrap: wrap; }
+  .topbar h1 {
+    font-size: 1.15rem;
+    margin: 0;
+    letter-spacing: 0.06em;
+  }
+  .topbar h1 .accent-mark { color: var(--accent); }
+  .topbar .date {
+    color: var(--text-muted);
+    font-size: 0.82rem;
+  }
+  .topbar-stats {
+    display: flex;
+    gap: 1.4rem;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+  }
+  .topbar-stats b { color: var(--text); font-weight: 700; }
+
+  main {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 0 2rem;
+  }
+
+  section.games-strip {
+    display: flex;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+    margin: 1.4rem 0 0.2rem 0;
+  }
+  .game-chip {
+    font-size: 0.74rem;
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+    padding: 0.28rem 0.6rem;
+    background: var(--surface);
+  }
+
+  /* ---------- section headings ---------- */
+  h2.section-title {
+    font-size: 0.78rem;
+    letter-spacing: 0.12em;
+    color: var(--text-faint);
+    margin: 2.6rem 0 0.9rem 0;
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+  }
+  h2.section-title::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* ---------- top picks ---------- */
+  .picks-scroll {
+    display: flex;
+    gap: 0.9rem;
+    overflow-x: auto;
+    padding-bottom: 0.6rem;
+    scrollbar-width: thin;
+  }
+  .pick-card {
+    flex: 0 0 300px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-top: 2px solid var(--good);
+    padding: 1rem 1.1rem 1.1rem 1.1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+  }
+  .pick-rank {
+    font-size: 0.7rem;
+    color: var(--accent);
+    letter-spacing: 0.08em;
+  }
+  .pick-player {
+    font-size: 1rem;
+    font-weight: 700;
+  }
+  .pick-line {
+    font-size: 0.86rem;
+    color: var(--text-muted);
+  }
+  .pick-line .side-tag {
+    font-weight: 700;
+    color: var(--text);
+  }
+  .pick-book-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    border-top: 1px solid var(--border);
+    padding-top: 0.5rem;
+  }
+  .pick-numbers {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 0.5rem;
+    font-size: 0.72rem;
+    color: var(--text-faint);
+  }
+  .pick-numbers b {
+    display: block;
+    font-size: 0.92rem;
+    color: var(--text);
+    font-weight: 700;
+  }
+  .pick-meter { margin-top: 0.1rem; }
+  .pick-rationale {
+    font-size: 0.76rem;
+    line-height: 1.5;
+    color: var(--text-muted);
+    max-height: 6.6em;
+    overflow: hidden;
+  }
+  .pick-ev {
+    margin-top: auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-size: 0.82rem;
+    padding-top: 0.3rem;
+  }
+  .pick-ev .ev-val { color: var(--good); font-weight: 700; }
+
+  /* ---------- confidence meter ---------- */
+  .meter {
+    height: 6px;
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    position: relative;
+    overflow: hidden;
+  }
+  .meter > span {
+    display: block;
+    height: 100%;
+    background: var(--accent);
+  }
+
+  /* ---------- controls ---------- */
+  .controls {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.8rem;
+    margin-bottom: 0.9rem;
+  }
+  .filter-group {
+    display: flex;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+  }
+  button.filter-btn {
+    font-family: inherit;
+    font-size: 0.76rem;
+    letter-spacing: 0.03em;
+    color: var(--text-muted);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 0.4rem 0.75rem;
+    cursor: pointer;
+  }
+  button.filter-btn:hover { color: var(--text); border-color: var(--accent-dim); }
+  button.filter-btn.active {
+    color: var(--bg);
+    background: var(--accent);
+    border-color: var(--accent);
+    font-weight: 700;
+  }
+  button.filter-btn:focus-visible, .expand-toggle:focus-visible, select:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+  select#sort-select {
+    font-family: inherit;
+    font-size: 0.76rem;
+    color: var(--text);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 0.4rem 0.6rem;
+  }
+  .count-note { font-size: 0.74rem; color: var(--text-faint); }
+
+  /* ---------- table ---------- */
+  .table-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    background: var(--surface);
+  }
+  table.board {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.82rem;
+    min-width: 920px;
+  }
+  table.board thead th {
+    position: sticky;
+    top: 58px;
+    background: var(--surface-raised);
+    text-align: left;
+    font-size: 0.68rem;
+    letter-spacing: 0.08em;
+    color: var(--text-faint);
+    font-weight: 700;
+    padding: 0.6rem 0.7rem;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  table.board th.num, table.board td.num { text-align: right; }
+  table.board tbody tr.row {
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+  }
+  table.board tbody tr.row:hover { background: var(--surface-alt); }
+  table.board tbody tr.row.is-flagged { background: var(--danger-bg); }
+  table.board td {
+    padding: 0.55rem 0.7rem;
+    vertical-align: middle;
+  }
+  td.player-cell { font-weight: 600; }
+  td.player-cell .market-sub {
+    display: block;
+    font-weight: 400;
+    color: var(--text-faint);
+    font-size: 0.72rem;
+    text-transform: capitalize;
+  }
+  .side-arrow { font-size: 0.72rem; margin-right: 0.3rem; }
+  .side-over { color: var(--text-muted); }
+  .side-under { color: var(--text-muted); }
+
+  .status-chip {
+    display: inline-block;
+    font-size: 0.65rem;
+    letter-spacing: 0.04em;
+    padding: 0.18rem 0.5rem;
+    border: 1px solid var(--neutral-chip);
+    color: var(--text-muted);
+  }
+  .status-chip.rec { border-color: var(--good); color: var(--good); }
+  .status-chip.flagged { border-color: var(--danger); color: var(--danger); }
+
+  .conf-cell { min-width: 92px; }
+  .conf-pct { font-size: 0.74rem; }
+
+  tr.detail-row td {
+    background: var(--surface-alt);
+    border-bottom: 1px solid var(--border);
+    padding: 1rem 1.4rem 1.2rem 1.4rem;
+    cursor: default;
+  }
+  tr.detail-row { display: none; }
+  tr.detail-row.open { display: table-row; }
+  .detail-grid {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 1.4rem;
+  }
+  .detail-rationale {
+    font-size: 0.86rem;
+    line-height: 1.6;
+    color: var(--text);
+    max-width: 62ch;
+  }
+  .detail-rationale .flag-line {
+    color: var(--danger);
+    font-weight: 700;
+    display: block;
+    margin-top: 0.5rem;
+  }
+  .detail-books {
+    font-size: 0.78rem;
+  }
+  .detail-books h4 {
+    margin: 0 0 0.5rem 0;
+    font-size: 0.68rem;
+    letter-spacing: 0.08em;
+    color: var(--text-faint);
+    font-weight: 700;
+  }
+  .book-line {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.25rem 0;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-muted);
+  }
+  .book-line b { color: var(--text); }
+  .trend-line {
+    margin-top: 0.8rem;
+    font-size: 0.74rem;
+    color: var(--text-faint);
+  }
+
+  footer.methodology {
+    max-width: 1180px;
+    margin: 3rem auto 0 auto;
+    padding: 1.4rem 2rem 0 2rem;
+    border-top: 1px solid var(--border);
+    font-size: 0.74rem;
+    color: var(--text-faint);
+    line-height: 1.6;
+  }
+  footer.methodology b { color: var(--text-muted); }
+
+  @media (max-width: 640px) {
+    header.topbar { padding: 1rem 1.1rem; }
+    main { padding: 0 1.1rem; }
+    .detail-grid { grid-template-columns: 1fr; }
+  }
+</style>
+
+<header class="topbar">
+  <div class="topbar-left">
+    <h1 class="display">WNBA <span class="accent-mark">PROP&nbsp;BOARD</span></h1>
+    <span class="date mono">2026-08-04</span>
+  </div>
+  <div class="topbar-stats mono">
+    <span><b id="stat-eval">0</b> evaluated</span>
+    <span><b id="stat-rec">0</b> recommended</span>
+    <span><b id="stat-flag">0</b> flagged</span>
+    <span>$1,000 bankroll · 0.3x Kelly · EV>1.05</span>
+  </div>
+</header>
+
+<main>
+  <section class="games-strip" id="games-strip"></section>
+
+  <h2 class="section-title">Top picks — highest EV, full reasoning</h2>
+  <div class="picks-scroll" id="picks-scroll"></div>
+
+  <h2 class="section-title">Full board — every prop evaluated</h2>
+  <div class="controls">
+    <div class="filter-group" id="filter-group">
+      <button class="filter-btn active" data-filter="all">All</button>
+      <button class="filter-btn" data-filter="recommended">Recommended</button>
+      <button class="filter-btn" data-filter="flagged">Flagged / stay-away</button>
+      <button class="filter-btn" data-filter="points">Points</button>
+      <button class="filter-btn" data-filter="rebounds">Rebounds</button>
+      <button class="filter-btn" data-filter="assists">Assists</button>
+    </div>
+    <div style="display:flex; align-items:center; gap:0.6rem;">
+      <span class="count-note" id="row-count"></span>
+      <select id="sort-select" aria-label="Sort board">
+        <option value="ev">Sort: EV (high→low)</option>
+        <option value="conf">Sort: Confidence (high→low)</option>
+        <option value="stake">Sort: Stake (high→low)</option>
+        <option value="player">Sort: Player (A→Z)</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table class="board">
+      <thead>
+        <tr>
+          <th>Status</th>
+          <th>Player / Market</th>
+          <th class="num">Line</th>
+          <th>Side</th>
+          <th>Best book</th>
+          <th class="num">Odds</th>
+          <th class="num">Projection</th>
+          <th class="num">Real L20 mean</th>
+          <th>Confidence</th>
+          <th class="num">EV</th>
+          <th class="num">Stake</th>
+        </tr>
+      </thead>
+      <tbody id="board-body"></tbody>
+    </table>
+  </div>
+
+  <footer class="methodology">
+    <p><b>How to read this board:</b> "Projection" is the fitted model's own point estimate (Poisson mean for assists, Negative Binomial mean for rebounds, quantile median for points/PRA) — not the number that decides the pick. The pick is decided by the full probability of clearing the sportsbook line, computed by whichever engine backtests better for that market: an empirical bootstrap Monte Carlo (resamples the player's own last 20 real games) for points, or the fitted parametric model for rebounds/assists/PRA. A skewed projection can legitimately sit on the opposite side of the line from the actual pick — that's flagged inline, not an error.</p>
+    <p><b>Stay-away flags</b> override EV entirely: a confirmed injury "Out", a usage-vacuum conflict, or a trend-conflict (the player's real last-5 rate and minutes both moving opposite the model's side by ≥25%/≥15%) forces stake to $0 regardless of edge.</p>
+    <p>Live injury report checked at generation time. Odds and lines are a single real-time snapshot — recheck before betting if time has passed.</p>
+  </footer>
+</main>
+
+<script id="board-data" type="application/json">[{"player": "Nyara Sabally", "game": "Toronto Tempo @ Golden State Valkyries", "market": "rebounds", "line": 4.5, "side": "Under", "best_book": "fanduel", "best_odds": 1.88, "books": [{"book": "fanduel", "odds": 1.88, "ev": 1.321, "stake": 50.0}, {"book": "betonlineag", "odds": 1.83, "ev": 1.286, "stake": 50.0}, {"book": "draftkings", "odds": 1.79, "ev": 1.258, "stake": 50.0}], "projection": 3.57, "projection_type": "NegBinom mean", "mean20": 3.9, "diff_vs_line": -0.93, "confidence_pct": "70.3% Under", "model_prob_over_pct": "29.7%", "mc_over_pct": "29.7%", "mc_pool": "not used for this market (backtest favors the parametric model, see EMPIRICAL_MC_TARGETS)", "ev": 1.321, "stake": 50.0, "flag": "", "injury_status": "no report", "injury_note": "", "usage_vacuum": "", "rationale": "NegBinom mean (point estimate) = 3.57 vs line 4.5 (diff -0.93). Real last-20-game raw average = 3.90. Last-5 real per-100 rate 3.58 vs last-10 4.68, minutes 18.8 vs 21.6. Injury status: no report. Vegas: total 168.5, Golden State Valkyries -13.0. DECISION: picked Under because the actual probability of clearing 4.5 was 29.7% Over / 70.3% Under, computed by the parametric model. EV 1.321 at 1.88 decimal odds on fanduel.", "last5": 3.58, "last10": 4.68, "minutes_trend": "18.8 vs 21.6", "recommended": true}, {"player": "Maria Conde", "game": "Toronto Tempo @ Golden State Valkyries", "market": "tpm", "line": 1.5, "side": "Under", "best_book": "fanduel", "best_odds": 2.3, "books": [{"book": "fanduel", "odds": 2.3, "ev": 1.307, "stake": 50.0}, {"book": "draftkings", "odds": 2.27, "ev": 1.29, "stake": 50.0}, {"book": "betonlineag", "odds": 2.25, "ev": 1.278, "stake": 50.0}], "projection": 1.47, "projection_type": "Poisson mean", "mean20": 1.68, "diff_vs_line": -0.03, "confidence_pct": "56.8% Under", "model_prob_over_pct": "43.2%", "mc_over_pct": "43.2%", "mc_pool": "not used for this market (backtest favors the parametric model, see EMPIRICAL_MC_TARGETS)", "ev": 1.307, "stake": 50.0, "flag": "", "injury_status": "no report", "injury_note": "", "usage_vacuum": "", "rationale": "Poisson mean (point estimate) = 1.47 vs line 1.5 (diff -0.03). Real last-20-game raw average = 1.68. NOTE: the point-estimate projection and the real recent average sit on OPPOSITE sides of the line -- expected for a skewed distribution where median/mean != the probability split, not an error, but worth a second look. Last-5 real per-100 rate 2.16 vs last-10 2.05, minutes 29.4 vs 31.7. Injury status: no report. Vegas: total 168.5, Golden State Valkyries -13.0. DECISION: picked Under because the actual probability of clearing 1.5 was 43.2% Over / 56.8% Under, computed by the parametric model. EV 1.307 at 2.30 decimal odds on fanduel.", "last5": 2.16, "last10": 2.05, "minutes_trend": "29.4 vs 31.7", "recommended": true}, {"player": "Kayla Thornton", "game": "Toronto Tempo @ Golden State Valkyries", "market": "rebounds", "line": 4.5, "side": "Under", "best_book": "fanduel", "best_odds": 2.18, "books": [{"book": "fanduel", "odds": 2.18, "ev": 1.237, "stake": 50.0}, {"book": "betonlineag", "odds": 2.16, "ev": 1.226, "stake": 50.0}], "projection": 4.39, "projection_type": "NegBinom mean", "mean20": 4.9, "diff_vs_line": -0.11, "confidence_pct": "56.7% Under", "model_prob_over_pct": "43.3%", "mc_over_pct": "43.3%", "mc_pool": "not used for this market (backtest favors the parametric model, see EMPIRICAL_MC_TARGETS)", "ev": 1.237, "stake": 50.0, "flag": "", "injury_status": "no report", "injury_note": "", "usage_vacuum": "", "rationale": "NegBinom mean (point estimate) = 4.39 vs line 4.5 (diff -0.11). Real last-20-game raw average = 4.90. NOTE: the point-estimate projection and the real recent average sit on OPPOSITE sides of the line -- expected for a skewed distribution where median/mean != the probability split, not an error, but worth a second look. Last-5 real per-100 rate 7.21 vs last-10 6.13, minutes 25.0 vs 23.3. Injury status: no report. Vegas: total 168.5, Golden State Valkyries -13.0. DECISION: picked Under because the actual probability of clearing 4.5 was 43.3% Over / 56.7% Under, computed by the parametric model. EV 1.237 at 2.18 decimal odds on fanduel.", "last5": 7.21, "last10": 6.13, "minutes_trend": "25.0 vs 23.3", "recommended": true}, {"player": "Marina Mabrey", "game": "Toronto Tempo @ Golden State Valkyries", "market": "assists", "line": 3.5, "side": "Over", "best_book": "betonlineag", "best_odds": 2.03, "books": [{"book": "betonlineag", "odds": 2.03, "ev": 1.221, "stake": 50.0}, {"book": "fanduel", "odds": 1.98, "ev": 1.191, "stake": 50.0}, {"book": "draftkings", "odds": 1.98, "ev": 1.191, "stake": 50.0}], "projection": 4.18, "projection_type": "Poisson mean", "mean20": 3.95, "diff_vs_line": 0.68, "confidence_pct": "60.1% Over", "model_prob_over_pct": "60.1%", "mc_over_pct": "60.1%", "mc_pool": "not used for this market (backtest favors the parametric model, see EMPIRICAL_MC_TARGETS)", "ev": 1.221, "stake": 50.0, "flag": "", "injury_status": "Day-To-Day", "injury_note": "Mabrey (neck) is listed as questionable for Tuesday's game versus Golden State.", "usage_vacuum": "", "rationale": "Poisson mean (point estimate) = 4.18 vs line 3.5 (diff +0.68). Real last-20-game raw average = 3.95. Last-5 real per-100 rate 5.27 vs last-10 4.61, minutes 31.8 vs 31.4. Injury status: Day-To-Day -- Mabrey (neck) is listed as questionable for Tuesday's game versus Golden State.. Vegas: total 168.5, Golden State Valkyries -13.0. DECISION: picked Over because the actual probability of clearing 3.5 was 60.1% Over / 39.9% Under, computed by the parametric model. EV 1.221 at 2.03 decimal odds on betonlineag.", "last5": 5.27, "last10": 4.61, "minutes_trend": "31.8 vs 31.4", "recommended": true}, {"player": "Cecilia Zandalasini", "game": "Toronto Tempo @ Golden State Valkyries", "market": "tpm", "line": 1.5, "side": "Under", "best_book": "betonlineag", "best_odds": 1.61, "books": [{"book": "betonlineag", "odds": 1.61, "ev": 1.204, "stake": 50.0}, {"book": "fanduel", "odds": 1.6, "ev": 1.196, "stake": 50.0}], "projection": 0.97, "projection_type": "Poisson mean", "mean20": 1.1, "diff_vs_line": -0.53, "confidence_pct": "74.8% Under", "model_prob_over_pct": "25.2%", "mc_over_pct": "25.2%", "mc_pool": "not used for this market (backtest favors the parametric model, see EMPIRICAL_MC_TARGETS)", "ev": 1.204, "stake": 50.0, "flag": "", "injury_status": "no report", "injury_note": "", "usage_vacuum": "", "rationale": "Poisson mean (point estimate) = 0.97 vs line 1.5 (diff -0.53). Real last-20-game raw average = 1.10. Last-5 real per-100 rate 1.55 vs last-10 1.17, minutes 20.2 vs 18.8. Injury status: no report. Vegas: total 168.5, Golden State Valkyries -13.0. DECISION: picked Under because the actual probability of clearing 1.5 was 25.2% Over / 74.8% Under, computed by the parametric model. EV 1.204 at 1.61 decimal odds on betonlineag.", "last5": 1.55, "last10": 1.17, "minutes_trend": "20.2 vs 18.8", "recommended": true}, {"player": "Gabby Williams", "game": "Toronto Tempo @ Golden State Valkyries", "market": "tpm", "line": 1.5, "side": "Under", "best_book": "fanduel", "best_odds": 1.88, "books": [{"book": "fanduel", "odds": 1.88, "ev": 1.189, "stake": 50.0}, {"book": "draftkings", "odds": 1.88, "ev": 1.189, "stake": 50.0}, {"book": "betonlineag", "odds": 1.86, "ev": 1.176, "stake": 50.0}], "projection": 1.28, "projection_type": "Poisson mean", "mean20": 1.7, "diff_vs_line": -0.22, "confidence_pct": "63.2% Under", "model_prob_over_pct": "36.8%", "mc_over_pct": "36.8%", "mc_pool": "not used for this market (backtest favors the parametric model, see EMPIRICAL_MC_TARGETS)", "ev": 1.189, "stake": 50.0, "flag": "", "injury_status": "no report", "injury_note": "", "usage_vacuum": "", "rationale": "Poisson mean (point estimate) = 1.28 vs line 1.5 (diff -0.22). Real last-20-game raw average = 1.70. NOTE: the point-estimate projection and the real recent average sit on OPPOSITE sides of the line -- expected for a skewed distribution where median/mean != the probability split, not an error, but worth a second look. Last-5 real per-100 rate 1.39 vs last-10 1.75, minutes 23.2 vs 23.8. Injury status: no report. Vegas: total 168.5, Golden State Valkyries -13.0. DECISION: picked Under because the actual probability of clearing 1.5 was 36.8% Over / 63.2% Under, computed by the parametric model. EV 1.189 at 1.88 decimal odds on fanduel.", "last5": 1.39, "last10": 1.75, "minutes_trend": "23.2 vs 23.8", "recommended": true}, {"player": "Nyara Sabally", "game": "Toronto Tempo @ Golden State Valkyries", "market": "points", "line": 10.5, "side": "Under", "best_book": "draftkings", "best_odds": 1.95, "books": [{"book": "draftkings", "odds": 1.95, "ev": 1.179, "stake": 50.0}, {"book": "betonlineag", "odds": 1.87, "ev": 1.13, "stake": 44.94}, {"book": "fanduel", "odds": 1.85, "ev": 1.118, "stake": 41.73}], "projection": 8.77, "projection_type": "quantile median", "mean20": 8.45, "diff_vs_line": -1.73, "confidence_pct": "60.4% Under", "model_prob_over_pct": "39.6%", "mc_over_pct": "39.6%", "mc_pool": "not used for this market (backtest favors the parametric model, see EMPIRICAL_MC_TARGETS)", "ev": 1.179, "stake": 50.0, "flag": "", "injury_status": "no report", "injury_note": "", "usage_vacuum": "", "rationale": "quantile median (point estimate) = 8.77 vs line 10.5 (diff -1.73). Real last-20-game raw average = 8.45. Last-5 real per-100 rate 13.11 vs last-10 13.41, minutes 18.8 vs 21.6. Injury status: no report. Vegas: total 168.5, Golden State Valkyries -13.0. DECISION: picked Under because the actual probability of clearing 10.5 was 39.6% Over / 60.4% Under, computed by the parametric model. EV 1.179 at 1.95 decimal odds on draftkings.", "last5": 13.11, "last10": 13.41, "minutes_trend": "18.8 vs 21.6", "recommended": true}, {"player": "Maria Conde", "game": "Toronto Tempo @ Golden State Valkyries", "market": "rebounds", "line": 3.5, "side": "Over", "best_book": "fanduel", "best_odds": 1.76, "books": [{"book": "fanduel", "odds": 1.76, "ev": 1.176, "stake": 50.0}, {"book": "betonlineag", "odds": 1.75, "ev": 1.17, "stake": 50.0}], "projection": 4.9, "projection_type": "NegBinom mean", "mean20": 5.0, "diff_vs_line": 1.4, "confidence_pct": "66.8% Over", "model_prob_over_pct": "66.8%", "mc_over_pct": "66.8%", "mc_pool": "not used for this market (backtest favors the parametric model, see EMPIRICAL_MC_TARGETS)", "ev": 1.176, "stake": 50.0, "flag": "", "injury_status": "no report", "injury_note": "", "usage_vacuum": "", "rationale": "NegBinom mean (point estimate) = 4.90 vs line 3.5 (diff +1.40). Real last-20-game raw average = 5.00. Last-5 real per-100 rate 6.85 vs last-10 6.44, minutes 29.4 vs 31.7. Injury status: no report. Vegas: total 168.5, Golden State Valkyries -13.0. DECISION: picked Over because the actual probability of clearing 3.5 was 66.8% Over / 33.2% Under, computed by the parametric model. EV 1.176 at 1.76 decimal odds on fanduel.", "last5": 6.85, "last10": 6.44, "minutes_trend": "29.4 vs 31.7", "recommended": true}, {"player": "Marina Mabrey", "game": "Toronto Tempo @ Golden State Valkyries", "market": "points", "line": 19.5, "side": "Over", "best_book": "betonlineag", "best_odds": 2.09, "books": [{"book": "betonlineag", "odds": 2.09, "ev": 1.169, "stake": 46.48}, {"book": "fanduel", "odds": 2.04, "ev": 1.141, "stake": 40.64}], "projection": 20.92, "projection_type": "quantile median", "mean20": 21.65, "diff_vs_line": 1.42, "confidence_pct": "55.9% Over", "model_prob_over_pct": "55.9%", "mc_over_pct": "55.9%", "mc_pool": "not used for this market (backtest favors the parametric model, see EMPIRICAL_MC_TARGETS)", "ev": 1.169, "stake": 46.48, "flag": "", "injury_status": "Day-To-Day", "injury_note": "Mabrey (neck) is listed as questionable for Tuesday's game versus Golden State.", "usage_vacuum": "", "rationale": "quantile median (point estimate) = 20.92 vs line 19.5 (diff +1.42). Real last-20-game raw average = 21.65. Last-5 real per-100 rate 24.28 vs last-10 29.10, minutes 31.8 vs 31.4. Injury status: Day-To-Day -- Mabrey (neck) is listed as questionable for Tuesday's game versus Golden State.. Vegas: total 168.5, Golden State Valkyries -13.0. DECISION: picked Over because the actual probability of clearing 19.5 was 55.9% Over / 44.1% Under, computed by the parametric model. EV 1.169 at 2.09 decimal odds on betonlineag.", "last5": 24.28, "last10": 29.1, "minutes_trend": "31.8 vs 31.4", "recommended": true}, {"player": "Gabby Williams", "game": "Toronto Tempo @ Golden State Valkyries", "market": "points", "line": 13.5, "side": "Under", "best_book": "draftkings", "best_odds": 1.99, "books": [{"book": "draftkings", "odds": 1.99, "ev": 1.162, "stake": 49.15}], "projection": 12.05, "projection_type": "quantile median", "mean20": 15.05, "diff_vs_line": -1.45, "confidence_pct": "58.4% Under", "model_prob_over_pct": "41.6%", "mc_over_pct": "41.6%", "mc_pool": "not used for this market (backtest favors the parametric model, see EMPIRICAL_MC_TARGETS)", "ev": 1.162, "stake": 49.15, "flag": "", "injury_status": "no report", "injury_note": "", "usage_vacuum": "", "rationale": "quantile median (point estimate) = 12.05 vs line 13.5 (diff -1.45). Real last-20-game raw average = 15.05. NOTE: the point-estimate projection and the real recent average sit on OPPOSITE sides of the line -- expected for a skewed distribution where median/mean != the probability split, not an error, but worth a second look. Last-5 real per-100 rate 14.07 vs last-10 16.81, minutes 23.2 vs 23.8. Injury status: no report. Vegas: total 168.5, Golden State Valkyries -13.0. DECISION: picked Under because the actual probability of clearing 13.5 was 41.6% Over / 58.4% Under, computed by the parametric model. EV 1.162 at 1.99 decimal odds on draftkings.", "last5": 14.07, "last10": 16.81, "minutes_trend": "23.2 vs 23.8", "recommended": true}, {"player": "Gabby Williams", "game": "Toronto Tempo @ Golden State Valkyries", "market": "rebounds", "line": 2.5, "side": "Under", "best_book": "betonlineag", "best_odds": 2.16, "books": [{"book": "betonlineag", "odds": 2.16, "ev": 1.158, "stake": 40.97}, {"book": "fanduel", "odds": 2.16, "ev": 1.158, "stake": 40.97}, {"book": "draftkings", "odds": 2.14, "ev": 1.148, "stake": 38.87}], "projection": 2.59, "projection_type": "NegBinom mean", "mean20": 3.1, "diff_vs_line": 0.09, "confidence_pct": "53.6% Under", "model_prob_over_pct": "46.4%", "mc_over_pct": "46.4%", "mc_pool": "not used for this market (backtest favors the parametric model, see EMPIRICAL_MC_TARGETS)", "ev": 1.158, "stake": 40.97, "flag": "", "injury_status": "no report", "injury_note": "", "usage_vacuum": "", "rationale": "NegBinom mean (point estimate) = 2.59 vs line 2.5 (diff +0.09). Real last-20-game raw average = 3.10. Last-5 real per-100 rate 2.79 vs last-10 3.10, minutes 23.2 vs 23.8. Injury status: no report. Vegas: total 168.5, Golden State Valkyries -13.0. DECISION: picked Under because the actual probability of clearing 2.5 was 46.4% Over / 53.6% Under, computed by the parametric model. EV 1.158 at 2.16 decimal odds on betonlineag.", "last5": 2.79, "last10": 3.1, "minutes_trend": "23.2 vs 23.8", "recommended": true}, {"player": "Julie Allemand", "game": "Toronto Tempo @ Golden State Valkyries", "market": "rebounds", "line": 2.5, "side": "Over", "best_book": "betonlineag", "best_odds": 1.74, "books": [{"book": "betonlineag", "odds": 1.74, "ev": 1.154, "stake": 50.0}, {"book": "draftkings", "odds": 1.72, "ev": 1.141, "stake": 50.0}, {"book": "fanduel", "odds": 1.68, "ev": 1.115, "stake": 50.0}], "projection": 3.65, "projection_type": "NegBinom mean", "mean20": 3.25, "diff_vs_line": 1.15, "confidence_pct": "66.3% Over", "model_prob_over_pct": "66.3%", "mc_over_pct": "66.3%", "mc_pool": "not used for this market (backtest favors the parametric model, see EMPIRICAL_MC_TARGETS)", "ev": 1.154, "stake": 50.0, "flag": "", "injury_status": "no report", "injury_note": "", "usage_vacuum": "", "rationale": "NegBinom mean (point estimate) = 3.65 vs line 2.5 (diff +1.15). Real last-20-game raw average = 3.25. Last-5 real per-100 rate 4.28 vs last-10 5.27, minutes 30.0 vs 32.3. Injury status: no report. Vegas: total 168.5, Golden State Valkyries -13.0. DECISION: picked Over because the actual probability of clearing 2.5 was 66.3% Over / 33.7% Under, computed by the parametric model. EV 1.154 at 1.74 decimal odds on betonlineag.", "last5": 4.28, "last10": 5.27, "minutes_trend": "30.0 vs 32.3", "recommended": true}, {"player": "Gabby Williams", "game": "Toronto Tempo @ Golden State Valkyries", "market": "points", "line": 14.5, "side": "Under", "best_book": "fanduel", "best_odds": 1.78, "books": [{"book": "fanduel", "odds": 1.78, "ev": 1.143, "stake": 50.0}, {"book": "betonlineag", "odds": 1.77, "ev": 1.136, "stake": 50.0}], "projection": 12.05, "projection_type": "quantile median", "mean20": 15.05, "diff_vs_line": -2.45, "confidence_pct": "64.2% Under", "model_prob_over_pct": "35.8%", "mc_over_pct": "35.8%", "mc_pool": "not used for this market (backtest favors the parametric model, see EMPIRICAL_MC_TARGETS)", "ev": 1.143, "stake": 50.0, "flag": "", "injury_status": "no report", "injury_note": "", "usage_vacuum": "", "rationale": "quantile median (point estimate) = 12.05 vs line 14.5 (diff -2.45). Real last-20-game raw average = 15.05. NOTE: the point-estimate projection and the real recent average sit on OPPOSITE sides of the line -- expected for a skewed distribution where median/mean != the probability split, not an error, but worth a second look. Last-5 real per-100 rate 14.07 vs last-10 16.81, minutes 23.2 vs 23.8. Injury status: no report. Vegas: total 168.5, Golden State Valkyries -13.0. DECISION: picked Under because the actual probability of clearing 14.5 was 35.8% Over / 64.2% Under, computed by the parametric model. EV 1.143 at 1.78 decimal odds on fanduel.", "last5": 14.07, "last10": 16.81, "minutes_trend": "23.2 vs 23.8", "recommended": true}, {"player": "Maria Conde", "game": "Toronto Tempo @ Golden State Valkyries", "market": "assists", "line": 2.5, "side": "Over", "best_book": "betonlineag", "best_odds": 2.13, "books": [{"book": "betonlineag", "odds": 2.13, "ev": 1.136, "stake": 35.99}, {"book": "fanduel", "odds": 2.1, "ev": 1.12, "stake": 32.61}, {"book": "draftkings", "odds": 2.07, "ev": 1.104, "stake": 29.04}], "projection": 2.81, "projection_type": "Poisson mean", "mean20": 3.32, "diff_vs_line": 0.31, "confidence_pct": "53.3% Over", "model_prob_over_pct": "53.3%", "mc_over_pct": "53.3%", "mc_pool": "not used for this market (backtest favors the parametric model, see EMPIRICAL_MC_TARGETS)", "ev": 1.136, "stake": 35.99, "flag": "", "injury_status": "no report", "injury_note": "", "usage_vacuum": "", "rationale": "Poisson mean (point estimate) = 2.81 vs line 2.5 (diff +0.31). Real last-20-game raw average = 3.32. Last-5 real per-100 rate 3.72 vs last-10 4.49, minutes 29.4 vs 31.7. Injury status: no report. Vegas: total 168.5, Golden State Valkyries -13.0. DECISION: picked Over because the actual probability of clearing 2.5 was 53.3% Over / 46.7% Under, computed by the parametric model. EV 1.136 at 2.13 decimal odds on betonlineag.", "last5": 3.72, "last10": 4.49, "minutes_trend": "29.4 vs 31.7", "recommended": true}, {"player": "Laura Juskaite", "game": "Toronto Tempo @ Golden State Valkyries", "market": "rebounds", "line": 3.5, "side": "Under", "best_book": "draftkings", "best_odds": 2.2, "books": [{"book": "draftkings", "odds": 2.2, "ev": 1.135, "stake": 33.79}], "projection": 3.7, "projection_type": "NegBinom mean", "mean20": 3.95, "diff_vs_line": 0.2, "confidence_pct": "51.6% Under", "model_prob_over_pct": "48.4%", "mc_over_pct": "48.4%", "mc_pool": "not used for this market (backtest favors the parametric model, see EMPIRICAL_MC_TARGETS)", "ev": 1.135, "stake": 33.79, "flag": "", "injury_status": "no report", "injury_note": "", "usage_vacuum": "", "rationale": "NegBinom mean (point estimate) = 3.70 vs line 3.5 (diff +0.20). Real last-20-game raw average = 3.95. Last-5 real per-100 rate 4.93 vs last-10 4.42, minutes 29.2 vs 26.6. Injury status: no report. Vegas: total 168.5, Golden State Valkyries -13.0. DECISION: picked Under because the actual probability of clearing 3.5 was 48.4% Over / 51.6% Under, computed by the parametric model. EV 1.135 at 2.20 decimal odds on draftkings.", "last5": 4.93, "last10": 4.42, "minutes_trend": "29.2 vs 26.6", "recommended": true}, {"player": "Julie Allemand", "game": "Toronto Tempo @ Golden State Valkyries", "market": "assists", "line": 5.5, "side": "Over", "best_book": "betonlineag", "best_odds": 1.94, "books": [{"book": "betonlineag", "odds": 1.94, "ev": 1.134, "stake": 42.87}, {"book": "draftkings", "odds": 1.92, "ev": 1.123, "stake": 39.98}, {"book": "fanduel", "odds": 1.89, "ev": 1.105, "stake": 35.42}], "projection": 6.19, "projection_type": "Poisson mean", "mean20": 5.85, "diff_vs_line": 0.69, "confidence_pct": "58.5% Over", "model_prob_over_pct": "58.5%", "mc_over_pct": "58.5%", "mc_pool": "not used for this market (backtest favors the parametric model, see EMPIRICAL_MC_TARGETS)", "ev": 1.134, "stake": 42.87, "flag": "", "injury_status": "no report", "injury_note": "", "usage_vacuum": "", "rationale": "Poisson mean (point estimate) = 6.19 vs line 5.5 (diff +0.69). Real last-20-game raw average = 5.85. Last-5 real per-100 rate 6.07 vs last-10 8.90, minutes 30.0 vs 32.3. Injury status: no report. Vegas: total 168.5, Golden State Valkyries -13.0. DECISION: picked Over because the actual probability of clearing 5.5 was 58.5% Over / 41.5% Under, computed by the parametric model. EV 1.134 at 1.94 decimal odds on betonlineag.", "last5": 6.07, "last10": 8.9, "minutes_trend": "30.0 vs 32.3", "recommended": true}, {"player": "Marina Mabrey", "game": "Toronto Tempo @ Golden State Valkyries", "market": "points", "line": 18.5, "side": "Over", "best_book": "draftkings", "best_odds": 1.88, "books": [{"book": "draftkings", "odds": 1.88, "ev": 1.13, "stake": 44.19}], "projection": 20.92, "projection_type": "quantile median", "mean20": 21.65, "diff_vs_line": 2.42, "confidence_pct": "60.1% Over", "model_prob_over_pct": "60.1%", "mc_over_pct": "60.1%", "mc_pool": "not used for this market (backtest favors the parametric model, see EMPIRICAL_MC_TARGETS)", "ev": 1.13, "stake": 44.19, "flag": "", "injury_status": "Day-To-Day", "injury_note": "Mabrey (neck) is listed as questionable for Tuesday's game versus Golden State.", "usage_vacuum": "", "rationale": "quantile median (point estimate) = 20.92 vs line 18.5 (diff +2.42). Real last-20-game raw average = 21.65. Last-5 real per-100 rate 24.28 vs last-10 29.10, minutes 31.8 vs 31.4. Injury status: Day-To-Day -- Mabrey (neck) is listed as questionable for Tuesday's game versus Golden State.. Vegas: total 168.5, Golden State Valkyries -13.0. DECISION: picked Over because the actual probability of clearing 18.5 was 60.1% Over / 39.9% Under, computed by the parametric model. EV 1.130 at 1.88 decimal odds on draftkings.", "last5": 24.28, "last10": 29.1, "minutes_trend": "31.8 vs 31.4", "recommended": true}, {"player": "Janelle Salaun", "game": "Toronto Tempo @ Golden State Valkyries", "market": "tpm", "line": 2.5, "side": "Under", "best_book": "draftkings", "best_odds": 1.6, "books": [{"book": "draftkings", "odds": 1.6, "ev": 1.13, "stake": 0.0}, {"book": "betonlineag", "odds": 1.59, "ev": 1.123, "stake": 0.0}, {"book": "fanduel", "odds": 1.57, "ev": 1.108, "stake": 0.0}], "projection": 1.89, "projection_type": "Poisson mean", "mean20": 2.55, "diff_vs_line": -0.61, "confidence_pct": "70.6% Under", "model_prob_over_pct": "29.4%", "mc_over_pct": "29.4%", "mc_pool": "not used for this market (backtest favors the parametric model, see EMPIRICAL_MC_TARGETS)", "ev": 1.13, "stake": 0.0, "flag": "USAGE VACUUM: Iliana Rupert (Out) named directly as this player's minutes/usage beneficiary -- Rupert signed a multi-year contract with Golden State during the offseason and missed the start of training camp due to an overseas commitment. Her status for the 2026 regular season now appears to be in jeopardy due to her pregnancy. The 24-year-old made 21 regular-season appearances (11 starts) for the Valkyries last year and averaged 9.3 points, 3.9 rebounds and 1.6 assists in 23.1 minutes per game. If Rupert is sidelined in 2026, Janelle Salaun, Kiah Stokes and Laeticia Amihere are candidates to see increased work. -- more usage argues against Under -- excluded", "injury_status": "no report", "injury_note": "", "usage_vacuum": "Iliana Rupert (Out) named directly as this player's minutes/usage beneficiary -- Rupert signed a multi-year contract with Golden State during the offseason and missed the start of training camp due to an overseas commitment. Her status for the 2026 regular season now appears to be in jeopardy due to her pregnancy. The 24-year-old made 21 regular-season appearances (11 starts) for the Valkyries last year and averaged 9.3 points, 3.9 rebounds and 1.6 assists in 23.1 minutes per game. If Rupert is sidelined in 2026, Janelle Salaun, Kiah Stokes and Laeticia Amihere are candidates to see increased work.", "rationale": "Poisson mean (point estimate) = 1.89 vs line 2.5 (diff -0.61). Real last-20-game raw average = 2.55. NOTE: the point-estimate projection and the real recent average sit on OPPOSITE sides of the line -- expected for a skewed distribution where median/mean != the probability split, not an error, but worth a second look. Last-5 real per-100 rate 3.00 vs last-10 3.08, minutes 21.6 vs 21.2. Injury status: no report. Usage vacuum: Iliana Rupert (Out) named directly as this player's minutes/usage beneficiary -- Rupert signed a multi-year contract with Golden State during the offseason and missed the start of training camp due to an overseas commitment. Her status for the 2026 regular season now appears to be in jeopardy due to her pregnancy. The 24-year-old made 21 regular-season appearances (11 starts) for the Valkyries last year and averaged 9.3 points, 3.9 rebounds and 1.6 assists in 23.1 minutes per game. If Rupert is sidelined in 2026, Janelle Salaun, Kiah Stokes and Laeticia Amihere are candidates to see increased work.. Vegas: total 168.5, Golden State Valkyries -13.0. DECISION: picked Under because the actual probability of clearing 2.5 was 29.4% Over / 70.6% Under, computed by the parametric model. EV 1.130 at 1.60 decimal odds on draftkings. *** USAGE VACUUM: Iliana Rupert (Out) named directly as this player's minutes/usage beneficiary -- Rupert signed a multi-year contract with Golden State during the offseason and missed the start of training camp due to an overseas commitment. Her status for the 2026 regular season now appears to be in jeopardy due to her pregnancy. The 24-year-old made 21 regular-season appearances (11 starts) for the Valkyries last year and averaged 9.3 points, 3.9 rebounds and 1.6 assists in 23.1 minutes per game. If Rupert is sidelined in 2026, Janelle Salaun, Kiah Stokes and Laeticia Amihere are candidates to see increased work. -- more usage argues against Under -- excluded ***", "last5": 3.0, "last10": 3.08, "minutes_trend": "21.6 vs 21.2", "recommended": false}, {"player": "Maria Conde", "game": "Toronto Tempo @ Golden State Valkyries", "market": "rebounds", "line": 4.5, "side": "Over", "best_book": "draftkings", "best_odds": 2.19, "books": [{"book": "draftkings", "odds": 2.19, "ev": 1.122, "stake": 30.64}], "projection": 4.9, "projection_type": "NegBinom mean", "mean20": 5.0, "diff_vs_line": 0.4, "confidence_pct": "51.2% Over", "model_prob_over_pct": "51.2%", "mc_over_pct": "51.2%", "mc_pool": "not used for this market (backtest favors the parametric model, see EMPIRICAL_MC_TARGETS)", "ev": 1.122, "stake": 30.64, "flag": "", "injury_status": "no report", "injury_note": "", "usage_vacuum": "", "rationale": "NegBinom mean (point estimate) = 4.90 vs line 4.5 (diff +0.40). Real last-20-game raw average = 5.00. Last-5 real per-100 rate 6.85 vs last-10 6.44, minutes 29.4 vs 31.7. Injury status: no report. Vegas: total 168.5, Golden State Valkyries -13.0. DECISION: picked Over because the actual probability of clearing 4.5 was 51.2% Over / 48.8% Under, computed by the parametric model. EV 1.122 at 2.19 decimal odds on draftkings.", "last5": 6.85, "last10": 6.44, "minutes_trend": "29.4 vs 31.7", "recommended": true}, {"player": "Cecilia Zandalasini", "game": "Toronto Tempo @ Golden State Valkyries", "market": "points", "line": 8.5, "side": "Under", "best_book": "betonlineag", "best_odds": 1.85, "books": [{"book": "betonlineag", "odds": 1.85, "ev": 1.118, "stake": 41.49}], "projection": 6.83, "projection_type": "quantile median", "mean20": 8.35, "diff_vs_line": -1.67, "confidence_pct": "60.4% Under", "model_prob_over_pct": "39.6%", "mc_over_pct": "39.6%", "mc_pool": "not used for this market (backtest favors the parametric model, see EMPIRICAL_MC_TARGETS)", "ev": 1.118, "stake": 41.49, "flag": "", "injury_status": "no report", "injury_note": "", "usage_vacuum": "", "rationale": "quantile median (point estimate) = 6.83 vs line 8.5 (diff -1.67). Real last-20-game raw average = 8.35. Last-5 real per-100 rate 11.40 vs last-10 9.89, minutes 20.2 vs 18.8. Injury status: no report. Vegas: total 168.5, Golden State Valkyries -13.0. DECISION: picked Under because the actual probability of clearing 8.5 was 39.6% Over / 60.4% Under, computed by the parametric model. EV 1.118 at 1.85 decimal odds on betonlineag.", "last5": 11.4, "last10": 9.89, "minutes_trend": "20.2 vs 18.8", "recommended": true}, {"player": "Gabby Williams", "game": "Toronto Tempo @ Golden State Valkyries", "market": "assists", "line": 2.5, "side": "Under", "best_book": "betonlineag", "best_odds": 1.71, "books": [{"book": "betonlineag", "odds": 1.71, "ev": 1.117, "stake": 49.5}, {"book": "draftkings", "odds": 1.69, "ev": 1.104, "stake": 45.26}, {"book": "fanduel", "odds": 1.68, "ev": 1.098, "stake": 43.04}], "projection": 2.09, "projection_type": "Poisson mean", "mean20": 1.95, "diff_vs_line": -0.41, "confidence_pct": "65.3% Under", "model_prob_over_pct": "34.7%", "mc_over_pct": "34.7%", "mc_pool": "not used for this market (backtest favors the parametric model, see EMPIRICAL_MC_TARGETS)", "ev": 1.117, "stake": 49.5, "flag": "", "injury_status": "no report", "injury_note": "", "usage_vacuum": "", "rationale": "Poisson mean (point estimate) = 2.09 vs line 2.5 (diff -0.41). Real last-20-game raw average = 1.95. Last-5 real per-100 rate 2.81 vs last-10 2.72, minutes 23.2 vs 23.8. Injury status: no report. Vegas: total 168.5, Golden State Valkyries -13.0. DECISION: picked Under because the actual probability of clearing 2.5 was 34.7% Over / 65.3% Under, computed by the parametric model. EV 1.117 at 1.71 decimal odds on betonlineag.", "last5": 2.81, "last10": 2.72, "minutes_trend": "23.2 vs 23.8", "recommended": true}, {"player": "Kaitlyn Chen", "game": "Toronto Tempo @ Golden State Valkyries", "market": "points", "line": 6.5, "side": "Over", "best_book": "betonlineag", "best_odds": 1.81, "books": [{"book": "betonlineag", "odds": 1.81, "ev": 1.114, "stake": 42.17}, {"book": "fanduel", "odds": 1.8, "ev": 1.108, "stake": 40.39}, {"book": "draftkings", "odds": 1.77, "ev": 1.089, "stake": 34.77}], "projection": 8.37, "projection_type": "quantile median", "mean20": 7.45, "diff_vs_line": 1.87, "confidence_pct": "61.5% Over", "model_prob_over_pct": "61.5%", "mc_over_pct": "61.5%", "mc_pool": "not used for this market (backtest favors the parametric model, see EMPIRICAL_MC_TARGETS)", "ev": 1.114, "stake": 42.17, "flag": "", "injury_status": "no report", "injury_note": "", "usage_vacuum": "", "rationale": "quantile median (point estimate) = 8.37 vs line 6.5 (diff +1.87). Real last-20-game raw average = 7.45. Last-5 real per-100 rate 12.66 vs last-10 13.61, minutes 14.8 vs 15.7. Injury status: no report. Vegas: total 168.5, Golden State Valkyries -13.0. DECISION: picked Over because the actual probability of clearing 6.5 was 61.5% Over / 38.5% Under, computed by the parametric model. EV 1.114 at 1.81 decimal odds on betonlineag.", "last5": 12.66, "last10": 13.61, "minutes_trend": "14.8 vs 15.7", "recommended": true}, {"player": "Laura Juskaite", "game": "Toronto Tempo @ Golden State Valkyries", "market": "rebounds", "line": 4.5, "side": "Under", "best_book": "betonlineag", "best_odds": 1.63, "books": [{"book": "betonlineag", "odds": 1.63, "ev": 1.11, "stake": 50.0}, {"book": "fanduel", "odds": 1.62, "ev": 1.103, "stake": 49.8}], "projection": 3.7, "projection_type": "NegBinom mean", "mean20": 3.95, "diff_vs_line": -0.8, "confidence_pct": "68.1% Under", "model_prob_over_pct": "31.9%", "mc_over_pct": "31.9%", "mc_pool": "not used for this market (backtest favors the parametric model, see EMPIRICAL_MC_TARGETS)", "ev": 1.11, "stake": 50.0, "flag": "", "injury_status": "no report", "injury_note": "", "usage_vacuum": "", "rationale": "NegBinom mean (point estimate) = 3.70 vs line 4.5 (diff -0.80). Real last-20-game raw average = 3.95. Last-5 real per-100 rate 4.93 vs last-10 4.42, minutes 29.2 vs 26.6. Injury status: no report. Vegas: total 168.5, Golden State Valkyries -13.0. DECISION: picked Under because the actual probability of clearing 4.5 was 31.9% Over / 68.1% Under, computed by the parametric model. EV 1.110 at 1.63 decimal odds on betonlineag.", "last5": 4.93, "last10": 4.42, "minutes_trend": "29.2 vs 26.6", "recommended": true}, {"player": "Janelle Salaun", "game": "Toronto Tempo @ Golden State Valkyries", "market": "rebounds", "line": 3.5, "side": "Under", "best_book": "draftkings", "best_odds": 2.06, "books": [{"book": "draftkings", "odds": 2.06, "ev": 1.068, "stake": 0.0}, {"book": "betonlineag", "odds": 2.01, "ev": 1.042, "stake": 0.0}, {"book": "fanduel", "odds": 2.0, "ev": 1.037, "stake": 0.0}], "projection": 3.69, "projection_type": "NegBinom mean", "mean20": 4.0, "diff_vs_line": 0.19, "confidence_pct": "51.8% Under", "model_prob_over_pct": "48.2%", "mc_over_pct": "48.2%", "mc_pool": "not used for this market (backtest favors the parametric model, see EMPIRICAL_MC_TARGETS)", "ev": 1.068, "stake": 0.0, "flag": "USAGE VACUUM: Iliana Rupert (Out) named directly as this player's minutes/usage beneficiary -- Rupert signed a multi-year contract with Golden State during the offseason and missed the start of training camp due to an overseas commitment. Her status for the 2026 regular season now appears to be in jeopardy due to her pregnancy. The 24-year-old made 21 regular-season appearances (11 starts) for the Valkyries last year and averaged 9.3 points, 3.9 rebounds and 1.6 assists in 23.1 minutes per game. If Rupert is sidelined in 2026, Janelle Salaun, Kiah Stokes and Laeticia Amihere are candidates to see increased work. -- more usage argues against Under -- excluded", "injury_status": "no report", "injury_note": "", "usage_vacuum": "Iliana Rupert (Out) named directly as this player's minutes/usage beneficiary -- Rupert signed a multi-year contract with Golden State during the offseason and missed the start of training camp due to an overseas commitment. Her status for the 2026 regular season now appears to be in jeopardy due to her pregnancy. The 24-year-old made 21 regular-season appearances (11 starts) for the Valkyries last year and averaged 9.3 points, 3.9 rebounds and 1.6 assists in 23.1 minutes per game. If Rupert is sidelined in 2026, Janelle Salaun, Kiah Stokes and Laeticia Amihere are candidates to see increased work.", "rationale": "NegBinom mean (point estimate) = 3.69 vs line 3.5 (diff +0.19). Real last-20-game raw average = 4.00. Last-5 real per-100 rate 4.90 vs last-10 5.04, minutes 21.6 vs 21.2. Injury status: no report. Usage vacuum: Iliana Rupert (Out) named directly as this player's minutes/usage beneficiary -- Rupert signed a multi-year contract with Golden State during the offseason and missed the start of training camp due to an overseas commitment. Her status for the 2026 regular season now appears to be in jeopardy due to her pregnancy. The 24-year-old made 21 regular-season appearances (11 starts) for the Valkyries last year and averaged 9.3 points, 3.9 rebounds and 1.6 assists in 23.1 minutes per game. If Rupert is sidelined in 2026, Janelle Salaun, Kiah Stokes and Laeticia Amihere are candidates to see increased work.. Vegas: total 168.5, Golden State Valkyries -13.0. DECISION: picked Under because the actual probability of clearing 3.5 was 48.2% Over / 51.8% Under, computed by the parametric model. EV 1.068 at 2.06 decimal odds on draftkings. *** USAGE VACUUM: Iliana Rupert (Out) named directly as this player's minutes/usage beneficiary -- Rupert signed a multi-year contract with Golden State during the offseason and missed the start of training camp due to an overseas commitment. Her status for the 2026 regular season now appears to be in jeopardy due to her pregnancy. The 24-year-old made 21 regular-season appearances (11 starts) for the Valkyries last year and averaged 9.3 points, 3.9 rebounds and 1.6 assists in 23.1 minutes per game. If Rupert is sidelined in 2026, Janelle Salaun, Kiah Stokes and Laeticia Amihere are candidates to see increased work. -- more usage argues against Under -- excluded ***", "last5": 4.9, "last10": 5.04, "minutes_trend": "21.6 vs 21.2", "recommended": false}, {"player": "Veronica Burton", "game": "Toronto Tempo @ Golden State Valkyries", "market": "assists", "line": 6.5, "side": "Under", "best_book": "draftkings", "best_odds": 1.62, "books": [{"book": "draftkings", "odds": 1.62, "ev": 1.063, "stake": 30.4}, {"book": "betonlineag", "odds": 1.61, "ev": 1.056, "stake": 27.67}, {"book": "fanduel", "odds": 1.6, "ev": 1.05, "stake": 0.0}], "projection": 5.69, "projection_type": "Poisson mean", "mean20": 5.25, "diff_vs_line": -0.81, "confidence_pct": "65.6% Under", "model_prob_over_pct": "34.4%", "mc_over_pct": "34.4%", "mc_pool": "not used for this market (backtest favors the parametric model, see EMPIRICAL_MC_TARGETS)", "ev": 1.063, "stake": 30.4, "flag": "", "injury_status": "no report", "injury_note": "", "usage_vacuum": "", "rationale": "Poisson mean (point estimate) = 5.69 vs line 6.5 (diff -0.81). Real last-20-game raw average = 5.25. Last-5 real per-100 rate 9.04 vs last-10 7.59, minutes 31.2 vs 28.0. Injury status: no report. Vegas: total 168.5, Golden State Valkyries -13.0. DECISION: picked Under because the actual probability of clearing 6.5 was 34.4% Over / 65.6% Under, computed by the parametric model. EV 1.063 at 1.62 decimal odds on draftkings.", "last5": 9.04, "last10": 7.59, "minutes_trend": "31.2 vs 28.0", "recommended": true}, {"player": "Veronica Burton", "game": "Toronto Tempo @ Golden State Valkyries", "market": "points", "line": 12.5, "side": "Under", "best_book": "draftkings", "best_odds": 1.9, "books": [{"book": "draftkings", "odds": 1.9, "ev": 1.059, "stake": 19.52}, {"book": "betonlineag", "odds": 1.83, "ev": 1.02, "stake": 0.0}, {"book": "fanduel", "odds": 1.82, "ev": 1.014, "stake": 0.0}], "projection": 11.42, "projection_type": "quantile median", "mean20": 11.25, "diff_vs_line": -1.08, "confidence_pct": "55.7% Under", "model_prob_over_pct": "44.3%", "mc_over_pct": "44.3%", "mc_pool": "not used for this market (backtest favors the parametric model, see EMPIRICAL_MC_TARGETS)", "ev": 1.059, "stake": 19.52, "flag": "", "injury_status": "no report", "injury_note": "", "usage_vacuum": "", "rationale": "quantile median (point estimate) = 11.42 vs line 12.5 (diff -1.08). Real last-20-game raw average = 11.25. Last-5 real per-100 rate 15.95 vs last-10 14.65, minutes 31.2 vs 28.0. Injury status: no report. Vegas: total 168.5, Golden State Valkyries -13.0. DECISION: picked Under because the actual probability of clearing 12.5 was 44.3% Over / 55.7% Under, computed by the parametric model. EV 1.059 at 1.90 decimal odds on draftkings.", "last5": 15.95, "last10": 14.65, "minutes_trend": "31.2 vs 28.0", "recommended": true}, {"player": "Kayla Thornton", "game": "Toronto Tempo @ Golden State Valkyries", "market": "points", "line": 8.5, "side": "Under", "best_book": "fanduel", "best_odds": 1.91, "books": [{"book": "fanduel", "odds": 1.91, "ev": 1.047, "stake": 0.0}, {"book": "betonlineag", "odds": 1.89, "ev": 1.036, "stake": 0.0}, {"book": "draftkings", "odds": 1.85, "ev": 1.014, "stake": 0.0}], "projection": 7.69, "projection_type": "quantile median", "mean20": 7.35, "diff_vs_line": -0.81, "confidence_pct": "54.8% Under", "model_prob_over_pct": "45.2%", "mc_over_pct": "45.2%", "mc_pool": "not used for this market (backtest favors the parametric model, see EMPIRICAL_MC_TARGETS)", "ev": 1.047, "stake": 0.0, "flag": "", "injury_status": "no report", "injury_note": "", "usage_vacuum": "", "rationale": "quantile median (point estimate) = 7.69 vs line 8.5 (diff -0.81). Real last-20-game raw average = 7.35. Last-5 real per-100 rate 12.08 vs last-10 10.14, minutes 25.0 vs 23.3. Injury status: no report. Vegas: total 168.5, Golden State Valkyries -13.0. DECISION: picked Under because the actual probability of clearing 8.5 was 45.2% Over / 54.8% Under, computed by the parametric model. EV 1.047 at 1.91 decimal odds on fanduel.", "last5": 12.08, "last10": 10.14, "minutes_trend": "25.0 vs 23.3", "recommended": false}, {"player": "Kiki Rice", "game": "Toronto Tempo @ Golden State Valkyries", "market": "points", "line": 9.5, "side": "Over", "best_book": "betonlineag", "best_odds": 1.81, "books": [{"book": "betonlineag", "odds": 1.81, "ev": 1.039, "stake": 0.0}], "projection": 10.94, "projection_type": "quantile median", "mean20": 8.67, "diff_vs_line": 1.44, "confidence_pct": "57.4% Over", "model_prob_over_pct": "57.4%", "mc_over_pct": "57.4%", "mc_pool": "not used for this market (backtest favors the parametric model, see EMPIRICAL_MC_TARGETS)", "ev": 1.039, "stake": 0.0, "flag": "", "injury_status": "no report", "injury_note": "", "usage_vacuum": "Marina Mabrey (Day-To-Day) named directly as this player's minutes/usage beneficiary -- Mabrey didn't play in Sunday's 96-79 loss to the Valkyries, marking only her second absence of the 2026 campaign. If Mabrey can't suit up for Tuesday's rematch, Kiki Rice will likely remain in the starting lineup.", "rationale": "quantile median (point estimate) = 10.94 vs line 9.5 (diff +1.44). Real last-20-game raw average = 8.67. NOTE: the point-estimate projection and the real recent average sit on OPPOSITE sides of the line -- expected for a skewed distribution where median/mean != the probability split, not an error, but worth a second look. Last-5 real per-100 rate 12.36 vs last-10 15.28, minutes 25.0 vs 26.8. Injury status: no report. Usage vacuum: Marina Mabrey (Day-To-Day) named directly as this player's minutes/usage beneficiary -- Mabrey didn't play in Sunday's 96-79 loss to the Valkyries, marking only her second absence of the 2026 campaign. If Mabrey can't suit up for Tuesday's rematch, Kiki Rice will likely remain in the starting lineup.. Vegas: total 168.5, Golden State Valkyries -13.0. DECISION: picked Over because the actual probability of clearing 9.5 was 57.4% Over / 42.6% Under, computed by the parametric model. EV 1.039 at 1.81 decimal odds on betonlineag.", "last5": 12.36, "last10": 15.28, "minutes_trend": "25.0 vs 26.8", "recommended": false}, {"player": "Laura Juskaite", "game": "Toronto Tempo @ Golden State Valkyries", "market": "tpm", "line": 1.5, "side": "Under", "best_book": "fanduel", "best_odds": 1.53, "books": [{"book": "fanduel", "odds": 1.53, "ev": 1.036, "stake": 0.0}, {"book": "betonlineag", "odds": 1.51, "ev": 1.023, "stake": 0.0}, {"book": "draftkings", "odds": 1.5, "ev": 1.016, "stake": 0.0}], "projection": 1.16, "projection_type": "Poisson mean", "mean20": 1.0, "diff_vs_line": -0.34, "confidence_pct": "67.7% Under", "model_prob_over_pct": "32.3%", "mc_over_pct": "32.3%", "mc_pool": "not used for this market (backtest favors the parametric model, see EMPIRICAL_MC_TARGETS)", "ev": 1.036, "stake": 0.0, "flag": "", "injury_status": "no report", "injury_note": "", "usage_vacuum": "", "rationale": "Poisson mean (point estimate) = 1.16 vs line 1.5 (diff -0.34). Real last-20-game raw average = 1.00. Last-5 real per-100 rate 1.43 vs last-10 1.57, minutes 29.2 vs 26.6. Injury status: no report. Vegas: total 168.5, Golden State Valkyries -13.0. DECISION: picked Under because the actual probability of clearing 1.5 was 32.3% Over / 67.7% Under, computed by the parametric model. EV 1.036 at 1.53 decimal odds on fanduel.", "last5": 1.43, "last10": 1.57, "minutes_trend": "29.2 vs 26.6", "recommended": false}, {"player": "Julie Allemand", "game": "Toronto Tempo @ Golden State Valkyries", "market": "points", "line": 6.5, "side": "Over", "best_book": "betonlineag", "best_odds": 1.95, "books": [{"book": "betonlineag", "odds": 1.95, "ev": 1.033, "stake": 0.0}, {"book": "draftkings", "odds": 1.93, "ev": 1.023, "stake": 0.0}, {"book": "fanduel", "odds": 1.91, "ev": 1.012, "stake": 0.0}], "projection": 6.88, "projection_type": "quantile median", "mean20": 7.8, "diff_vs_line": 0.38, "confidence_pct": "53.0% Over", "model_prob_over_pct": "53.0%", "mc_over_pct": "53.0%", "mc_pool": "not used for this market (backtest favors the parametric model, see EMPIRICAL_MC_TARGETS)", "ev": 1.033, "stake": 0.0, "flag": "", "injury_status": "no report", "injury_note": "", "usage_vacuum": "", "rationale": "quantile median (point estimate) = 6.88 vs line 6.5 (diff +0.38). Real last-20-game raw average = 7.80. Last-5 real per-100 rate 9.29 vs last-10 9.48, minutes 30.0 vs 32.3. Injury status: no report. Vegas: total 168.5, Golden State Valkyries -13.0. DECISION: picked Over because the actual probability of clearing 6.5 was 53.0% Over / 47.0% Under, computed by the parametric model. EV 1.033 at 1.95 decimal odds on betonlineag.", "last5": 9.29, "last10": 9.48, "minutes_trend": "30.0 vs 32.3", "recommended": false}, {"player": "Kaitlyn Chen", "game": "Toronto Tempo @ Golden State Valkyries", "market": "assists", "line": 2.5, "side": "Over", "best_book": "draftkings", "best_odds": 2.02, "books": [{"book": "draftkings", "odds": 2.02, "ev": 1.019, "stake": 0.0}, {"book": "betonlineag", "odds": 2.0, "ev": 1.009, "stake": 0.0}, {"book": "fanduel", "odds": 1.98, "ev": 0.999, "stake": 0.0}], "projection": 2.69, "projection_type": "Poisson mean", "mean20": 2.15, "diff_vs_line": 0.19, "confidence_pct": "50.4% Over", "model_prob_over_pct": "50.4%", "mc_over_pct": "50.4%", "mc_pool": "not used for this market (backtest favors the parametric model, see EMPIRICAL_MC_TARGETS)", "ev": 1.019, "stake": 0.0, "flag": "", "injury_status": "no report", "injury_note": "", "usage_vacuum": "", "rationale": "Poisson mean (point estimate) = 2.69 vs line 2.5 (diff +0.19). Real last-20-game raw average = 2.15. NOTE: the point-estimate projection and the real recent average sit on OPPOSITE sides of the line -- expected for a skewed distribution where median/mean != the probability split, not an error, but worth a second look. Last-5 real per-100 rate 3.92 vs last-10 3.57, minutes 14.8 vs 15.7. Injury status: no report. Vegas: total 168.5, Golden State Valkyries -13.0. DECISION: picked Over because the actual probability of clearing 2.5 was 50.4% Over / 49.6% Under, computed by the parametric model. EV 1.019 at 2.02 decimal odds on draftkings.", "last5": 3.92, "last10": 3.57, "minutes_trend": "14.8 vs 15.7", "recommended": false}, {"player": "Veronica Burton", "game": "Toronto Tempo @ Golden State Valkyries", "market": "rebounds", "line": 3.5, "side": "Under", "best_book": "draftkings", "best_odds": 1.69, "books": [{"book": "draftkings", "odds": 1.69, "ev": 1.016, "stake": 0.0}, {"book": "betonlineag", "odds": 1.69, "ev": 1.016, "stake": 0.0}, {"book": "fanduel", "odds": 1.68, "ev": 1.01, "stake": 0.0}], "projection": 3.24, "projection_type": "NegBinom mean", "mean20": 3.4, "diff_vs_line": -0.26, "confidence_pct": "60.1% Under", "model_prob_over_pct": "39.9%", "mc_over_pct": "39.9%", "mc_pool": "not used for this market (backtest favors the parametric model, see EMPIRICAL_MC_TARGETS)", "ev": 1.016, "stake": 0.0, "flag": "", "injury_status": "no report", "injury_note": "", "usage_vacuum": "", "rationale": "NegBinom mean (point estimate) = 3.24 vs line 3.5 (diff -0.26). Real last-20-game raw average = 3.40. Last-5 real per-100 rate 4.90 vs last-10 4.20, minutes 31.2 vs 28.0. Injury status: no report. Vegas: total 168.5, Golden State Valkyries -13.0. DECISION: picked Under because the actual probability of clearing 3.5 was 39.9% Over / 60.1% Under, computed by the parametric model. EV 1.016 at 1.69 decimal odds on draftkings.", "last5": 4.9, "last10": 4.2, "minutes_trend": "31.2 vs 28.0", "recommended": false}, {"player": "Marina Mabrey", "game": "Toronto Tempo @ Golden State Valkyries", "market": "tpm", "line": 2.5, "side": "Under", "best_book": "draftkings", "best_odds": 2.11, "books": [{"book": "draftkings", "odds": 2.11, "ev": 1.008, "stake": 0.0}, {"book": "fanduel", "odds": 2.08, "ev": 0.993, "stake": 0.0}, {"book": "betonlineag", "odds": 2.05, "ev": 0.979, "stake": 0.0}], "projection": 2.77, "projection_type": "Poisson mean", "mean20": 3.1, "diff_vs_line": 0.27, "confidence_pct": "47.8% Under", "model_prob_over_pct": "52.2%", "mc_over_pct": "52.2%", "mc_pool": "not used for this market (backtest favors the parametric model, see EMPIRICAL_MC_TARGETS)", "ev": 1.008, "stake": 0.0, "flag": "", "injury_status": "Day-To-Day", "injury_note": "Mabrey (neck) is listed as questionable for Tuesday's game versus Golden State.", "usage_vacuum": "", "rationale": "Poisson mean (point estimate) = 2.77 vs line 2.5 (diff +0.27). Real last-20-game raw average = 3.10. Last-5 real per-100 rate 2.86 vs last-10 3.97, minutes 31.8 vs 31.4. Injury status: Day-To-Day -- Mabrey (neck) is listed as questionable for Tuesday's game versus Golden State.. Vegas: total 168.5, Golden State Valkyries -13.0. DECISION: picked Under because the actual probability of clearing 2.5 was 52.2% Over / 47.8% Under, computed by the parametric model. EV 1.008 at 2.11 decimal odds on draftkings.", "last5": 2.86, "last10": 3.97, "minutes_trend": "31.8 vs 31.4", "recommended": false}, {"player": "Janelle Salaun", "game": "Toronto Tempo @ Golden State Valkyries", "market": "points", "line": 12.5, "side": "Under", "best_book": "draftkings", "best_odds": 1.88, "books": [{"book": "draftkings", "odds": 1.88, "ev": 0.993, "stake": 0.0}, {"book": "fanduel", "odds": 1.88, "ev": 0.993, "stake": 0.0}, {"book": "betonlineag", "odds": 1.86, "ev": 0.982, "stake": 0.0}], "projection": 12.0, "projection_type": "quantile median", "mean20": 12.85, "diff_vs_line": -0.5, "confidence_pct": "52.8% Under", "model_prob_over_pct": "47.2%", "mc_over_pct": "47.2%", "mc_pool": "not used for this market (backtest favors the parametric model, see EMPIRICAL_MC_TARGETS)", "ev": 0.993, "stake": 0.0, "flag": "USAGE VACUUM: Iliana Rupert (Out) named directly as this player's minutes/usage beneficiary -- Rupert signed a multi-year contract with Golden State during the offseason and missed the start of training camp due to an overseas commitment. Her status for the 2026 regular season now appears to be in jeopardy due to her pregnancy. The 24-year-old made 21 regular-season appearances (11 starts) for the Valkyries last year and averaged 9.3 points, 3.9 rebounds and 1.6 assists in 23.1 minutes per game. If Rupert is sidelined in 2026, Janelle Salaun, Kiah Stokes and Laeticia Amihere are candidates to see increased work. -- more usage argues against Under -- excluded", "injury_status": "no report", "injury_note": "", "usage_vacuum": "Iliana Rupert (Out) named directly as this player's minutes/usage beneficiary -- Rupert signed a multi-year contract with Golden State during the offseason and missed the start of training camp due to an overseas commitment. Her status for the 2026 regular season now appears to be in jeopardy due to her pregnancy. The 24-year-old made 21 regular-season appearances (11 starts) for the Valkyries last year and averaged 9.3 points, 3.9 rebounds and 1.6 assists in 23.1 minutes per game. If Rupert is sidelined in 2026, Janelle Salaun, Kiah Stokes and Laeticia Amihere are candidates to see increased work.", "rationale": "quantile median (point estimate) = 12.00 vs line 12.5 (diff -0.50). Real last-20-game raw average = 12.85. NOTE: the point-estimate projection and the real recent average sit on OPPOSITE sides of the line -- expected for a skewed distribution where median/mean != the probability split, not an error, but worth a second look. Last-5 real per-100 rate 16.41 vs last-10 16.97, minutes 21.6 vs 21.2. Injury status: no report. Usage vacuum: Iliana Rupert (Out) named directly as this player's minutes/usage beneficiary -- Rupert signed a multi-year contract with Golden State during the offseason and missed the start of training camp due to an overseas commitment. Her status for the 2026 regular season now appears to be in jeopardy due to her pregnancy. The 24-year-old made 21 regular-season appearances (11 starts) for the Valkyries last year and averaged 9.3 points, 3.9 rebounds and 1.6 assists in 23.1 minutes per game. If Rupert is sidelined in 2026, Janelle Salaun, Kiah Stokes and Laeticia Amihere are candidates to see increased work.. Vegas: total 168.5, Golden State Valkyries -13.0. DECISION: picked Under because the actual probability of clearing 12.5 was 47.2% Over / 52.8% Under, computed by the parametric model. EV 0.993 at 1.88 decimal odds on draftkings. *** USAGE VACUUM: Iliana Rupert (Out) named directly as this player's minutes/usage beneficiary -- Rupert signed a multi-year contract with Golden State during the offseason and missed the start of training camp due to an overseas commitment. Her status for the 2026 regular season now appears to be in jeopardy due to her pregnancy. The 24-year-old made 21 regular-season appearances (11 starts) for the Valkyries last year and averaged 9.3 points, 3.9 rebounds and 1.6 assists in 23.1 minutes per game. If Rupert is sidelined in 2026, Janelle Salaun, Kiah Stokes and Laeticia Amihere are candidates to see increased work. -- more usage argues against Under -- excluded ***", "last5": 16.41, "last10": 16.97, "minutes_trend": "21.6 vs 21.2", "recommended": false}, {"player": "Maria Conde", "game": "Toronto Tempo @ Golden State Valkyries", "market": "points", "line": 10.5, "side": "Under", "best_book": "draftkings", "best_odds": 1.79, "books": [{"book": "draftkings", "odds": 1.79, "ev": 0.99, "stake": 0.0}, {"book": "betonlineag", "odds": 1.78, "ev": 0.984, "stake": 0.0}, {"book": "fanduel", "odds": 1.77, "ev": 0.979, "stake": 0.0}], "projection": 9.58, "projection_type": "quantile median", "mean20": 10.0, "diff_vs_line": -0.92, "confidence_pct": "55.3% Under", "model_prob_over_pct": "44.7%", "mc_over_pct": "44.7%", "mc_pool": "not used for this market (backtest favors the parametric model, see EMPIRICAL_MC_TARGETS)", "ev": 0.99, "stake": 0.0, "flag": "", "injury_status": "no report", "injury_note": "", "usage_vacuum": "", "rationale": "quantile median (point estimate) = 9.58 vs line 10.5 (diff -0.92). Real last-20-game raw average = 10.00. Last-5 real per-100 rate 13.29 vs last-10 12.60, minutes 29.4 vs 31.7. Injury status: no report. Vegas: total 168.5, Golden State Valkyries -13.0. DECISION: picked Under because the actual probability of clearing 10.5 was 44.7% Over / 55.3% Under, computed by the parametric model. EV 0.990 at 1.79 decimal odds on draftkings.", "last5": 13.29, "last10": 12.6, "minutes_trend": "29.4 vs 31.7", "recommended": false}, {"player": "Marina Mabrey", "game": "Toronto Tempo @ Golden State Valkyries", "market": "rebounds", "line": 3.5, "side": "Over", "best_book": "draftkings", "best_odds": 2.14, "books": [{"book": "draftkings", "odds": 2.14, "ev": 0.99, "stake": 0.0}, {"book": "betonlineag", "odds": 2.12, "ev": 0.98, "stake": 0.0}, {"book": "fanduel", "odds": 2.04, "ev": 0.943, "stake": 0.0}], "projection": 3.58, "projection_type": "NegBinom mean", "mean20": 3.3, "diff_vs_line": 0.08, "confidence_pct": "46.2% Over", "model_prob_over_pct": "46.2%", "mc_over_pct": "46.2%", "mc_pool": "not used for this market (backtest favors the parametric model, see EMPIRICAL_MC_TARGETS)", "ev": 0.99, "stake": 0.0, "flag": "", "injury_status": "Day-To-Day", "injury_note": "Mabrey (neck) is listed as questionable for Tuesday's game versus Golden State.", "usage_vacuum": "", "rationale": "NegBinom mean (point estimate) = 3.58 vs line 3.5 (diff +0.08). Real last-20-game raw average = 3.30. NOTE: the point-estimate projection and the real recent average sit on OPPOSITE sides of the line -- expected for a skewed distribution where median/mean != the probability split, not an error, but worth a second look. Last-5 real per-100 rate 4.04 vs last-10 4.71, minutes 31.8 vs 31.4. Injury status: Day-To-Day -- Mabrey (neck) is listed as questionable for Tuesday's game versus Golden State.. Vegas: total 168.5, Golden State Valkyries -13.0. DECISION: picked Over because the actual probability of clearing 3.5 was 46.2% Over / 53.8% Under, computed by the parametric model. EV 0.990 at 2.14 decimal odds on draftkings.", "last5": 4.04, "last10": 4.71, "minutes_trend": "31.8 vs 31.4", "recommended": false}, {"player": "Kayla Thornton", "game": "Toronto Tempo @ Golden State Valkyries", "market": "tpm", "line": 1.5, "side": "Under", "best_book": "fanduel", "best_odds": 1.98, "books": [{"book": "fanduel", "odds": 1.98, "ev": 0.987, "stake": 0.0}, {"book": "betonlineag", "odds": 1.94, "ev": 0.967, "stake": 0.0}, {"book": "draftkings", "odds": 1.92, "ev": 0.957, "stake": 0.0}], "projection": 1.68, "projection_type": "Poisson mean", "mean20": 1.5, "diff_vs_line": 0.18, "confidence_pct": "49.8% Under", "model_prob_over_pct": "50.2%", "mc_over_pct": "50.2%", "mc_pool": "not used for this market (backtest favors the parametric model, see EMPIRICAL_MC_TARGETS)", "ev": 0.987, "stake": 0.0, "flag": "", "injury_status": "no report", "injury_note": "", "usage_vacuum": "", "rationale": "Poisson mean (point estimate) = 1.68 vs line 1.5 (diff +0.18). Real last-20-game raw average = 1.50. NOTE: the point-estimate projection and the real recent average sit on OPPOSITE sides of the line -- expected for a skewed distribution where median/mean != the probability split, not an error, but worth a second look. Last-5 real per-100 rate 2.95 vs last-10 2.16, minutes 25.0 vs 23.3. Injury status: no report. Vegas: total 168.5, Golden State Valkyries -13.0. DECISION: picked Under because the actual probability of clearing 1.5 was 50.2% Over / 49.8% Under, computed by the parametric model. EV 0.987 at 1.98 decimal odds on fanduel.", "last5": 2.95, "last10": 2.16, "minutes_trend": "25.0 vs 23.3", "recommended": false}, {"player": "Veronica Burton", "game": "Toronto Tempo @ Golden State Valkyries", "market": "tpm", "line": 1.5, "side": "Under", "best_book": "draftkings", "best_odds": 1.65, "books": [{"book": "draftkings", "odds": 1.65, "ev": 0.972, "stake": 0.0}, {"book": "fanduel", "odds": 1.65, "ev": 0.972, "stake": 0.0}, {"book": "betonlineag", "odds": 1.65, "ev": 0.972, "stake": 0.0}], "projection": 1.41, "projection_type": "Poisson mean", "mean20": 1.15, "diff_vs_line": -0.09, "confidence_pct": "58.9% Under", "model_prob_over_pct": "41.1%", "mc_over_pct": "41.1%", "mc_pool": "not used for this market (backtest favors the parametric model, see EMPIRICAL_MC_TARGETS)", "ev": 0.972, "stake": 0.0, "flag": "", "injury_status": "no report", "injury_note": "", "usage_vacuum": "", "rationale": "Poisson mean (point estimate) = 1.41 vs line 1.5 (diff -0.09). Real last-20-game raw average = 1.15. Last-5 real per-100 rate 1.89 vs last-10 1.47, minutes 31.2 vs 28.0. Injury status: no report. Vegas: total 168.5, Golden State Valkyries -13.0. DECISION: picked Under because the actual probability of clearing 1.5 was 41.1% Over / 58.9% Under, computed by the parametric model. EV 0.972 at 1.65 decimal odds on draftkings.", "last5": 1.89, "last10": 1.47, "minutes_trend": "31.2 vs 28.0", "recommended": false}, {"player": "Laura Juskaite", "game": "Toronto Tempo @ Golden State Valkyries", "market": "points", "line": 10.5, "side": "Under", "best_book": "draftkings", "best_odds": 1.79, "books": [{"book": "draftkings", "odds": 1.79, "ev": 0.955, "stake": 0.0}], "projection": 9.88, "projection_type": "quantile median", "mean20": 11.16, "diff_vs_line": -0.62, "confidence_pct": "53.4% Under", "model_prob_over_pct": "46.6%", "mc_over_pct": "46.6%", "mc_pool": "not used for this market (backtest favors the parametric model, see EMPIRICAL_MC_TARGETS)", "ev": 0.955, "stake": 0.0, "flag": "", "injury_status": "no report", "injury_note": "", "usage_vacuum": "", "rationale": "quantile median (point estimate) = 9.88 vs line 10.5 (diff -0.62). Real last-20-game raw average = 11.16. NOTE: the point-estimate projection and the real recent average sit on OPPOSITE sides of the line -- expected for a skewed distribution where median/mean != the probability split, not an error, but worth a second look. Last-5 real per-100 rate 14.10 vs last-10 13.87, minutes 29.2 vs 26.6. Injury status: no report. Vegas: total 168.5, Golden State Valkyries -13.0. DECISION: picked Under because the actual probability of clearing 10.5 was 46.6% Over / 53.4% Under, computed by the parametric model. EV 0.955 at 1.79 decimal odds on draftkings.", "last5": 14.1, "last10": 13.87, "minutes_trend": "29.2 vs 26.6", "recommended": false}, {"player": "Laura Juskaite", "game": "Toronto Tempo @ Golden State Valkyries", "market": "points", "line": 10.5, "side": "Over", "best_book": "betonlineag", "best_odds": 2.03, "books": [{"book": "betonlineag", "odds": 2.03, "ev": 0.947, "stake": 0.0}, {"book": "fanduel", "odds": 2.02, "ev": 0.942, "stake": 0.0}], "projection": 9.88, "projection_type": "quantile median", "mean20": 11.16, "diff_vs_line": -0.62, "confidence_pct": "46.6% Over", "model_prob_over_pct": "46.6%", "mc_over_pct": "46.6%", "mc_pool": "not used for this market (backtest favors the parametric model, see EMPIRICAL_MC_TARGETS)", "ev": 0.947, "stake": 0.0, "flag": "", "injury_status": "no report", "injury_note": "", "usage_vacuum": "", "rationale": "quantile median (point estimate) = 9.88 vs line 10.5 (diff -0.62). Real last-20-game raw average = 11.16. NOTE: the point-estimate projection and the real recent average sit on OPPOSITE sides of the line -- expected for a skewed distribution where median/mean != the probability split, not an error, but worth a second look. Last-5 real per-100 rate 14.10 vs last-10 13.87, minutes 29.2 vs 26.6. Injury status: no report. Vegas: total 168.5, Golden State Valkyries -13.0. DECISION: picked Over because the actual probability of clearing 10.5 was 46.6% Over / 53.4% Under, computed by the parametric model. EV 0.947 at 2.03 decimal odds on betonlineag.", "last5": 14.1, "last10": 13.87, "minutes_trend": "29.2 vs 26.6", "recommended": false}]</script>
+<script>
+(function () {
+  const DATA = JSON.parse(document.getElementById('board-data').textContent);
+
+  const games = [...new Set(DATA.map(d => d.game))].filter(Boolean);
+
+  document.getElementById('stat-eval').textContent = DATA.length;
+  document.getElementById('stat-rec').textContent = DATA.filter(d => d.recommended).length;
+  document.getElementById('stat-flag').textContent = DATA.filter(d => d.flag).length;
+
+  function statusOf(d) {
+    if (d.flag) return 'flagged';
+    if (d.recommended) return 'recommended';
+    return 'none';
+  }
+
+  function confPct(d) {
+    const m = /([\d.]+)%/.exec(d.confidence_pct);
+    return m ? parseFloat(m[1]) : 0;
+  }
+
+  function sideArrow(side) {
+    return side === 'Over' ? '▲' : '▼';
+  }
+
+  function renderMeter(pct) {
+    return `<div class="meter"><span style="width:${pct}%"></span></div>`;
+  }
+
+  // ---------- top picks ----------
+  const picksEl = document.getElementById('picks-scroll');
+  const topPicks = DATA.filter(d => d.recommended).slice().sort((a, b) => b.ev - a.ev).slice(0, 8);
+  picksEl.innerHTML = topPicks.map((d, i) => `
+    <div class="pick-card">
+      <div class="pick-rank mono">#${i + 1} · EV ${d.ev.toFixed(3)}</div>
+      <div class="pick-player">${d.player}</div>
+      <div class="pick-line">${d.market} <span class="side-tag">${sideArrow(d.side)} ${d.side} ${d.line}</span></div>
+      <div class="pick-book-row mono">
+        <span>${d.best_book}</span>
+        <span>@ ${d.best_odds.toFixed(2)}</span>
+      </div>
+      <div class="pick-numbers mono">
+        <div>Line<br><b>${d.line}</b></div>
+        <div>Projection<br><b>${d.projection.toFixed(2)}</b></div>
+        <div>Real L20<br><b>${d.mean20 !== null ? d.mean20.toFixed(2) : '—'}</b></div>
+      </div>
+      <div class="pick-meter">${renderMeter(confPct(d))}<div class="conf-pct mono" style="margin-top:0.3rem; color:var(--text-muted);">${d.confidence_pct} confidence</div></div>
+      <div class="pick-rationale">${d.rationale.replace(/DECISION:/, '<br><br>DECISION:')}</div>
+      <div class="pick-ev mono">
+        <span style="color:var(--text-faint);">stake $${d.stake.toFixed(2)}</span>
+        <span class="ev-val">EV ${d.ev.toFixed(3)}</span>
+      </div>
+    </div>
+  `).join('');
+
+  // ---------- games strip ----------
+  document.getElementById('games-strip').innerHTML = games.map(g => `<span class="game-chip">${g}</span>`).join('');
+
+  // ---------- full board ----------
+  const bodyEl = document.getElementById('board-body');
+  const rowCountEl = document.getElementById('row-count');
+  let activeFilter = 'all';
+  let activeSort = 'ev';
+
+  function marketOf(d) { return d.market; }
+
+  function applyFilterSort() {
+    let rows = DATA.slice();
+    if (activeFilter === 'recommended') rows = rows.filter(d => d.recommended && !d.flag);
+    else if (activeFilter === 'flagged') rows = rows.filter(d => d.flag);
+    else if (['points', 'rebounds', 'assists'].includes(activeFilter)) rows = rows.filter(d => marketOf(d) === activeFilter);
+
+    if (activeSort === 'ev') rows.sort((a, b) => b.ev - a.ev);
+    else if (activeSort === 'conf') rows.sort((a, b) => confPct(b) - confPct(a));
+    else if (activeSort === 'stake') rows.sort((a, b) => b.stake - a.stake);
+    else if (activeSort === 'player') rows.sort((a, b) => a.player.localeCompare(b.player));
+
+    renderRows(rows);
+  }
+
+  function renderRows(rows) {
+    rowCountEl.textContent = `${rows.length} shown`;
+    bodyEl.innerHTML = rows.map((d, idx) => {
+      const status = statusOf(d);
+      const chip = status === 'recommended'
+        ? '<span class="status-chip rec">RECOMMENDED</span>'
+        : status === 'flagged'
+          ? '<span class="status-chip flagged">STAY AWAY</span>'
+          : '<span class="status-chip">no edge</span>';
+      const pct = confPct(d);
+      const rid = `r${idx}`;
+      return `
+        <tr class="row ${status === 'flagged' ? 'is-flagged' : ''}" data-target="${rid}">
+          <td>${chip}</td>
+          <td class="player-cell">${d.player}<span class="market-sub">${d.market}</span></td>
+          <td class="num mono">${d.line}</td>
+          <td class="side-${d.side.toLowerCase()}"><span class="side-arrow">${sideArrow(d.side)}</span>${d.side}</td>
+          <td>${d.best_book}</td>
+          <td class="num mono">${d.best_odds.toFixed(2)}</td>
+          <td class="num mono">${d.projection.toFixed(2)}<br><span style="color:var(--text-faint); font-size:0.68rem;">${d.projection_type}</span></td>
+          <td class="num mono">${d.mean20 !== null ? d.mean20.toFixed(2) : '—'}</td>
+          <td class="conf-cell">${renderMeter(pct)}<span class="conf-pct mono">${d.confidence_pct}</span></td>
+          <td class="num mono" style="color:${d.ev >= 1.05 ? 'var(--good)' : 'var(--text-muted)'};">${d.ev.toFixed(3)}</td>
+          <td class="num mono">${d.stake > 0 ? '$' + d.stake.toFixed(2) : '—'}</td>
+        </tr>
+        <tr class="detail-row" id="${rid}">
+          <td colspan="11">
+            <div class="detail-grid">
+              <div class="detail-rationale">
+                ${d.rationale}
+                ${d.flag ? `<span class="flag-line">*** ${d.flag} ***</span>` : ''}
+                <div class="trend-line mono">Last-5 vs last-10 per-100 rate: ${d.last5} vs ${d.last10} &nbsp;·&nbsp; Minutes: ${d.minutes_trend}</div>
+              </div>
+              <div class="detail-books">
+                <h4>All books quoted</h4>
+                ${d.books.map(b => `<div class="book-line mono"><span>${b.book}</span><b>${b.odds.toFixed(2)}</b></div>`).join('')}
+              </div>
+            </div>
+          </td>
+        </tr>
+      `;
+    }).join('');
+
+    bodyEl.querySelectorAll('tr.row').forEach(tr => {
+      tr.addEventListener('click', () => {
+        const detail = document.getElementById(tr.dataset.target);
+        detail.classList.toggle('open');
+      });
+    });
+  }
+
+  document.getElementById('filter-group').addEventListener('click', (e) => {
+    const btn = e.target.closest('.filter-btn');
+    if (!btn) return;
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    activeFilter = btn.dataset.filter;
+    applyFilterSort();
+  });
+
+  document.getElementById('sort-select').addEventListener('change', (e) => {
+    activeSort = e.target.value;
+    applyFilterSort();
+  });
+
+  applyFilterSort();
+})();
+</script>

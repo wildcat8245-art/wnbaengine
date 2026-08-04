@@ -1125,3 +1125,55 @@ cost). Every board pull after that, same day, is fast. Nothing needs to be
 done to enable this — it's the default behavior of the training functions
 now. `data/processed/model_cache/` is gitignored (regenerable, date-scoped,
 not source).
+
+### 14.7 Real live grading vs. a fresh held-out backtest, same night
+
+Tonight's first live board (2026-08-03) came back rough after the first
+two of three real games finished: 58 real recommended bets graded, 44.8%
+win rate vs. 74.1% stated confidence (a real -29.3pp gap) — see the live
+grading run for full detail (`graded_predictions.csv`, filtered to
+`board_date == '2026-08-03'`, confidence matched to the actual picked side,
+not raw `model_prob_over_pct`).
+
+User's real, correct instinct: don't just wave that off as noise without
+checking. Ran a proper all-7-target backtest, same validated stack models,
+same train≤2024/test=2025-2026 split (no leakage), restricted to just the
+**last 20 real game-dates** (2026-07-08 to 2026-08-02, 1,207 rows) instead
+of live data, to check for recent-specific degradation vs. normal
+short-sample variance:
+
+| target | bets | real win rate | stated confidence | gap |
+|---|---|---|---|---|
+| points | 217 | 61.3% | 60.2% | +1.1pp |
+| rebounds | 253 | 60.1% | 62.7% | -2.6pp |
+| assists | 187 | 61.5% | 61.9% | -0.4pp |
+| pra | 236 | 57.6% | 59.1% | -1.5pp |
+| tpm | 78 | 56.4% | 60.7% | -4.3pp |
+| steals | 104 | 58.7% | 59.7% | -1.0pp |
+| **blocks** | 21 | **42.9%** | 60.3% | **-17.4pp** |
+| **ALL COMBINED** | **1,096** | **59.3%** | **60.8%** | **-1.5pp** |
+
+**Real conclusion**: the underlying system is NOT broken. 1,096 real bets
+on the most recent month of actual games, 59.3% win rate, 1.5pp gap —
+tight, honest calibration, consistent with the full-season backtest
+numbers already validated (§14.2). Six of seven targets are solid. Tonight's
+rough 2-game live read (n=58, 44.8%) is well within normal binomial
+variance for a system with a genuine ~57-59% true win rate (roughly 1.9
+standard deviations low, which happens by chance a non-trivial fraction of
+the time at this sample size) — not evidence the system needs fixing.
+
+**Real exception, not new**: blocks at 42.9%/21 bets on the most recent
+data specifically, matching the long-standing unresolved concern from
+§12.1 (both engines lost money in the original backtest) and never fully
+resolved even by the ensemble stack in the full-season number (§14.2
+showed blocks flipping to profitable overall, but this recent-window
+check shows it's still shaky specifically in the most recent month).
+**Treat blocks as still-unresolved, thinnest-evidence market — don't
+present blocks picks with the same confidence as the other six**, even
+though the full-season ensemble number looked good.
+
+**Process note worth repeating**: this is exactly the discipline this
+project has needed all along — when a live result looks bad, check with a
+real, properly-controlled backtest before deciding whether to "go in and
+fix" something, rather than either dismissing it or overreacting to a
+two-game sample in either direction.
